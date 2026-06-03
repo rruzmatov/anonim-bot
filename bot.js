@@ -976,15 +976,22 @@ function findConversationMessageForCallback(query, conversation) {
   const telegramMessageId = String(query.message.message_id);
   const userId = String(query.from.id);
 
-  return (
-    conversation.messages.find(
-      (message) =>
-        String(message.toId) === userId &&
-        message.telegramMessageId !== null &&
-        message.telegramMessageId !== undefined &&
-        String(message.telegramMessageId) === telegramMessageId
-    ) || getLatestInboundConversationMessage(conversation, userId)
-  );
+  const exactMatch = conversation.messages.find((message) => {
+    return (
+      String(message.toId) === userId &&
+      message.telegramMessageId !== null &&
+      message.telegramMessageId !== undefined &&
+      String(message.telegramMessageId) === telegramMessageId
+    );
+  });
+
+  if (exactMatch) return exactMatch;
+
+  const inboundMessages = conversation.messages
+    .filter((message) => String(message.toId) === userId)
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  return inboundMessages[0] || null;
 }
 
 function setConversationMessageTelegramId(conversation, messageId, telegramMessageId) {
@@ -1039,11 +1046,11 @@ function conversationMessageKeyboard(conversationId, viewerId, messageId = "") {
         { text: "💬 Ответить", callback_data: `reply_conv:${conversationId}` },
         { text: "🎭 Реакция", callback_data: `reaction_menu:${conversationId}` },
       ],
-      [{ text: "📜 История", callback_data: `history:${conversationId}` }],
       [
         { text: blockText, callback_data: blockCallback },
         { text: "🗑 Удалить диалог", callback_data: `delete_dialog:${conversationId}` },
       ],
+      [{ text: "📜 История", callback_data: `history:${conversationId}` }],
     ],
   };
 }
@@ -2253,13 +2260,17 @@ bot.on("callback_query", async (query) => {
         return;
       }
 
-      const message = findConversationMessageForCallback(query, conversation);
-      if (!message || String(message.toId) !== String(from.id)) {
-        await safeSendMessage(chatId, "❌ Сообщение для реакции не найдено.");
-        return;
+      let message = findConversationMessageForCallback(query, conversation);
+      if (!message) {
+        const fallbackMessage = getLatestInboundConversationMessage(conversation, from.id);
+
+        if (!fallbackMessage) {
+          await safeSendMessage(chatId, "❌ Сообщение для реакции не найдено.");
+          return;
+        }
       }
 
-      await safeEditMessageReplyMarkup(chatId, query.message.message_id, reactionMenuKeyboard(conversation.id, message.id));
+      await safeEditMessageReplyMarkup(chatId, query.message.message_id, reactionMenuKeyboard(conversation.id, message && message.id));
       return;
     }
 
