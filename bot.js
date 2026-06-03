@@ -68,6 +68,7 @@ let reactions = {};
 const pendingAnonymousMessages = new Map();
 const pendingReplies = new Map();
 const pendingSupportMessages = new Map();
+const startCooldown = new Map();
 
 function loadEnvFile() {
   const envPath = path.join(__dirname, ".env");
@@ -2150,6 +2151,15 @@ async function exportJson(chatId, from) {
 
 bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
   try {
+    const cooldownKey = String(msg.from.id);
+    const now = Date.now();
+    const lastStart = startCooldown.get(cooldownKey) || 0;
+
+    if (now - lastStart < 1500) {
+      return;
+    }
+
+    startCooldown.set(cooldownKey, now);
     const code = match && match[1] ? match[1].trim() : "";
     if (code) {
       await handleStartWithCode(msg.chat.id, msg.from, code);
