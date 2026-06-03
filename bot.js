@@ -877,12 +877,21 @@ function getAnnConversationOwnerId(conversation) {
   return String(conversation.user2);
 }
 
+function getAnnConversationSenderId(conversation) {
+  if (!isAnnConversation(conversation) || !conversation.user1) return "";
+  return String(conversation.user1);
+}
+
 function canViewConversationSenderInfo(conversation, viewerId, options = {}) {
   if (!isAnnConversation(conversation)) return false;
+  const viewer = String(viewerId || "");
+  const senderId = getAnnConversationSenderId(conversation);
+
+  if (senderId && viewer === senderId) return false;
   if (options.admin) return true;
 
   const ownerId = getAnnConversationOwnerId(conversation);
-  return Boolean(ownerId && String(viewerId) === ownerId);
+  return Boolean(ownerId && viewer === ownerId);
 }
 
 function formatConversationSenderBlock(conversation, viewerId, options = {}) {
