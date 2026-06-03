@@ -260,6 +260,9 @@ function migrateConversationsFromMessages() {
     .map((conversation) => {
       const normalizedConversation = {
         id: String(conversation.id),
+        aliases: Array.isArray(conversation.aliases)
+          ? conversation.aliases.map((item) => String(item)).filter(Boolean)
+          : [],
         user1: Number(conversation.user1),
         user2: Number(conversation.user2),
         source: conversation.source || "start",
@@ -298,6 +301,7 @@ function migrateConversationsFromMessages() {
         conversationId = createId("conv");
         const conversation = {
           id: conversationId,
+          aliases: [],
           user1: Number(item.senderId),
           user2: Number(item.receiverId),
           source: item.source || "start",
@@ -342,6 +346,7 @@ function migrateConversationsFromMessages() {
       conversationId = createId("conv");
       const conversation = {
         id: conversationId,
+        aliases: [],
         user1: Number(item.fromId),
         user2: Number(item.toId),
         source: "start",
@@ -378,6 +383,7 @@ function normalizeConversationIdsForCallbackData() {
 
   for (const conversation of conversations) {
     const currentId = String(conversation.id);
+    if (!Array.isArray(conversation.aliases)) conversation.aliases = [];
     if (currentId.length <= 20) continue;
 
     let newId;
@@ -388,6 +394,7 @@ function normalizeConversationIdsForCallbackData() {
     usedIds.delete(currentId);
     usedIds.add(newId);
     idMap.set(currentId, newId);
+    if (!conversation.aliases.includes(currentId)) conversation.aliases.push(currentId);
     conversation.id = newId;
   }
 
@@ -767,6 +774,7 @@ function createConversation(user1, user2, options = {}) {
   const date = nowIso();
   const conversation = {
     id: createId("conv"),
+    aliases: [],
     user1: Number(user1),
     user2: Number(user2),
     source: options.source || "start",
@@ -820,7 +828,60 @@ function ensureConversationMessage(conversation, message) {
 }
 
 function findConversation(conversationId) {
-  return conversations.find((conversation) => conversation.id === String(conversationId)) || null;
+  const id = String(conversationId || "");
+  if (!id) return null;
+
+  return (
+    conversations.find((conversation) => {
+      if (String(conversation.id) === id) return true;
+      return Array.isArray(conversation.aliases) && conversation.aliases.map(String).includes(id);
+    }) || null
+  );
+}
+
+function findConversationByMessageId(messageId) {
+  const id = String(messageId || "");
+  if (!id) return null;
+
+  return (
+    conversations.find((conversation) => {
+      return (
+        Array.isArray(conversation.messages) &&
+        conversation.messages.some((message) => String(message.id) === id)
+      );
+    }) || null
+  );
+}
+
+function findConversationByTelegramMessage(query) {
+  if (!query || !query.message || !query.from) return null;
+
+  const telegramMessageId = String(query.message.message_id);
+  const userId = String(query.from.id);
+
+  return (
+    conversations.find((conversation) => {
+      return (
+        Array.isArray(conversation.messages) &&
+        conversation.messages.some((message) => {
+          return (
+            String(message.toId) === userId &&
+            message.telegramMessageId !== null &&
+            message.telegramMessageId !== undefined &&
+            String(message.telegramMessageId) === telegramMessageId
+          );
+        })
+      );
+    }) || null
+  );
+}
+
+function resolveConversationForCallback(conversationId, query, messageId = "") {
+  return (
+    findConversation(conversationId) ||
+    findConversationByMessageId(messageId) ||
+    findConversationByTelegramMessage(query)
+  );
 }
 
 function isConversationParticipant(conversation, userId) {
@@ -940,17 +1001,21 @@ function setConversationMessageTelegramId(conversation, messageId, telegramMessa
 function deleteConversation(conversationId) {
   const conversation = findConversation(conversationId);
   if (!conversation) return false;
+  const conversationIds = new Set([String(conversation.id)]);
+  if (Array.isArray(conversation.aliases)) {
+    for (const alias of conversation.aliases) conversationIds.add(String(alias));
+  }
 
   const messageIds = new Set(
     (Array.isArray(conversation.messages) ? conversation.messages : []).map((message) => String(message.id))
   );
 
-  conversations = conversations.filter((item) => item.id !== String(conversationId));
+  conversations = conversations.filter((item) => !conversationIds.has(String(item.id)));
   messages = messages.filter((item) => {
-    return String(item.conversationId || "") !== String(conversationId) && !messageIds.has(String(item.id));
+    return !conversationIds.has(String(item.conversationId || "")) && !messageIds.has(String(item.id));
   });
   answers = answers.filter((item) => {
-    return String(item.conversationId || "") !== String(conversationId) && !messageIds.has(String(item.id));
+    return !conversationIds.has(String(item.conversationId || "")) && !messageIds.has(String(item.id));
   });
 
   for (const messageId of messageIds) {
@@ -966,6 +1031,7 @@ function conversationMessageKeyboard(conversationId, viewerId, messageId = "") {
   const otherId = conversation ? getOtherConversationUserId(conversation, viewerId) : "";
   const isBlockedByViewer = otherId ? hasBlocked(viewerId, otherId) : false;
   const blockText = isBlockedByViewer ? "🔓 Разблокировать" : "🚫 Заблокировать";
+  const blockCallback = isBlockedByViewer ? `unblock:${conversationId}` : `block:${conversationId}`;
 
   return {
     inline_keyboard: [
@@ -973,8 +1039,9 @@ function conversationMessageKeyboard(conversationId, viewerId, messageId = "") {
         { text: "💬 Ответить", callback_data: `reply_conv:${conversationId}` },
         { text: "🎭 Реакция", callback_data: `reaction_menu:${conversationId}` },
       ],
+      [{ text: "📜 История", callback_data: `history:${conversationId}` }],
       [
-        { text: blockText, callback_data: `block:${conversationId}` },
+        { text: blockText, callback_data: blockCallback },
         { text: "🗑 Удалить диалог", callback_data: `delete_dialog:${conversationId}` },
       ],
     ],
@@ -1636,6 +1703,22 @@ async function showConversationHistory(chatId, from, conversationId) {
   await safeSendLongMessage(chatId, formatConversationHistory(conversation, from.id, { limit: 50 }));
 }
 
+async function showConversationHistoryFromCallback(chatId, from, conversationId, query) {
+  const conversation = resolveConversationForCallback(conversationId, query);
+
+  if (!conversation) {
+    await safeSendMessage(chatId, "❌ История недоступна: диалог не найден.");
+    return;
+  }
+
+  if (!isConversationParticipant(conversation, from.id) && !isOwner(from.id)) {
+    await safeSendMessage(chatId, "⛔ У вас нет доступа к этому диалогу.");
+    return;
+  }
+
+  await safeSendLongMessage(chatId, formatConversationHistory(conversation, from.id, { limit: 50 }));
+}
+
 function buildAdminConversationsKeyboard(limit = 20) {
   const keyboard = conversations
     .slice()
@@ -2116,7 +2199,7 @@ bot.on("callback_query", async (query) => {
 
     if (data && data.startsWith("reply_conv:")) {
       const conversationId = data.slice("reply_conv:".length);
-      const conversation = findConversation(conversationId);
+      const conversation = resolveConversationForCallback(conversationId, query);
 
       if (!conversation) {
         await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
@@ -2158,7 +2241,7 @@ bot.on("callback_query", async (query) => {
 
     if (data && data.startsWith("reaction_menu:")) {
       const conversationId = data.slice("reaction_menu:".length);
-      const conversation = findConversation(conversationId);
+      const conversation = resolveConversationForCallback(conversationId, query);
 
       if (!conversation) {
         await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
@@ -2185,7 +2268,7 @@ bot.on("callback_query", async (query) => {
       const conversationId = parts[1];
       const messageIdForReaction = parts[2];
       const emoji = parts.slice(3).join(":");
-      const conversation = findConversation(conversationId);
+      const conversation = resolveConversationForCallback(conversationId, query, messageIdForReaction);
 
       if (!conversation) {
         await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
@@ -2227,7 +2310,7 @@ bot.on("callback_query", async (query) => {
 
     if (data && data.startsWith("block:")) {
       const conversationId = data.slice("block:".length);
-      const conversation = findConversation(conversationId);
+      const conversation = resolveConversationForCallback(conversationId, query);
 
       if (!conversation) {
         await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
@@ -2246,13 +2329,12 @@ bot.on("callback_query", async (query) => {
       }
 
       if (hasBlocked(from.id, otherId)) {
-        unblockUser(from.id, otherId);
         await safeEditMessageReplyMarkup(
           chatId,
           query.message.message_id,
           conversationMessageKeyboard(conversation.id, from.id)
         );
-        await safeSendMessage(chatId, "🔓 Собеседник разблокирован. Диалог снова доступен.");
+        await safeSendMessage(chatId, "🚫 Вы уже заблокировали этого собеседника.");
         return;
       }
 
@@ -2267,9 +2349,39 @@ bot.on("callback_query", async (query) => {
       return;
     }
 
+    if (data && data.startsWith("unblock:")) {
+      const conversationId = data.slice("unblock:".length);
+      const conversation = resolveConversationForCallback(conversationId, query);
+
+      if (!conversation) {
+        await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
+        return;
+      }
+
+      if (!isConversationParticipant(conversation, from.id)) {
+        await safeSendMessage(chatId, "⛔ У вас нет доступа.");
+        return;
+      }
+
+      const otherId = getOtherConversationUserId(conversation, from.id);
+      if (!otherId) {
+        await safeSendMessage(chatId, "❌ Собеседник не найден.");
+        return;
+      }
+
+      unblockUser(from.id, otherId);
+      await safeEditMessageReplyMarkup(
+        chatId,
+        query.message.message_id,
+        conversationMessageKeyboard(conversation.id, from.id)
+      );
+      await safeSendMessage(chatId, "🔓 Собеседник разблокирован. Диалог снова доступен.");
+      return;
+    }
+
     if (data && data.startsWith("delete_dialog:")) {
       const conversationId = data.slice("delete_dialog:".length);
-      const conversation = findConversation(conversationId);
+      const conversation = resolveConversationForCallback(conversationId, query);
 
       if (!conversation) {
         await safeSendMessage(chatId, "🗑 Диалог уже удалён.");
@@ -2286,6 +2398,11 @@ bot.on("callback_query", async (query) => {
       await safeEditMessageReplyMarkup(chatId, query.message.message_id, { inline_keyboard: [] });
       await safeSendMessage(chatId, "🗑 Диалог удалён.");
       return;
+    }
+
+    if (data && data.startsWith("history:")) {
+      const conversationId = data.slice("history:".length);
+      return showConversationHistoryFromCallback(chatId, from, conversationId, query);
     }
 
     if (data === "admin_users") return showAdminUsers(chatId, from, messageId);
