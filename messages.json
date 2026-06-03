@@ -81,7 +81,248 @@
     "date": "2026-06-02T12:58:48.080Z",
     "status": "sent",
     "telegramMessageId": 283,
-    "canReply": true,
-    "replies": []
+    "canReply": false,
+    "replies": [
+      "reply_1780407261659_20bb2e58"
+    ],
+    "answers": [
+      {
+        "id": "reply_1780407261659_20bb2e58",
+        "questionMessageId": "msg_1780405127893_80f150d7",
+        "questionText": "Можно я поцелую тебя  губы, на которых ты сидишь)?🤣",
+        "answerText": "ААА ЧЕГО БЛИН",
+        "answeredBy": 8014507256,
+        "sentTo": 8308193839,
+        "date": "2026-06-02T13:34:21.839Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "reply_1780407261659_20bb2e58",
+    "type": "reply",
+    "originalMessageId": "msg_1780405127893_80f150d7",
+    "questionText": "Можно я поцелую тебя  губы, на которых ты сидишь)?🤣",
+    "answerText": "ААА ЧЕГО БЛИН",
+    "fromId": 8014507256,
+    "toId": 8308193839,
+    "text": "ААА ЧЕГО БЛИН",
+    "date": "2026-06-02T13:34:21.839Z",
+    "status": "sent"
+  },
+  {
+    "id": "msg_1780419548099_a4bbd4f1",
+    "type": "anonymous_message",
+    "senderId": 1486279991,
+    "senderUsername": "@ZJDESIGN",
+    "senderName": "ZJ🏀",
+    "receiverId": 8014507256,
+    "text": "Ладно привет от Жабы!🐸",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "date": "2026-06-02T16:59:14.510Z",
+    "status": "sent",
+    "telegramMessageId": 317,
+    "canReply": false,
+    "replies": [
+      "reply_1780420469216_037a601c"
+    ],
+    "answers": [
+      {
+        "id": "reply_1780420469216_037a601c",
+        "questionMessageId": "msg_1780419548099_a4bbd4f1",
+        "questionText": "Ладно привет от Жабы!🐸",
+        "answerText": "прпр",
+        "answeredBy": 8014507256,
+        "sentTo": 1486279991,
+        "date": "2026-06-02T17:14:30.127Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "msg_1780419548095_8e32765f",
+    "type": "anonymous_message",
+    "senderId": 8368731065,
+    "senderUsername": "@sh_azzz77",
+    "senderName": "🇺🇲",
+    "receiverId": 8014507256,
+    "text": "Днх",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "date": "2026-06-02T16:59:20.041Z",
+    "status": "sent",
+    "telegramMessageId": 322,
+    "canReply": false,
+    "replies": [
+      "reply_1780420461951_5ee01c7c"
+    ],
+    "answers": [
+      {
+        "id": "reply_1780420461951_5ee01c7c",
+        "questionMessageId": "msg_1780419548095_8e32765f",
+        "questionText": "Днх",
+        "answerText": "тре лох",
+        "answeredBy": 8014507256,
+        "sentTo": 8368731065,
+        "date": "2026-06-02T17:14:22.127Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "msg_1780419548100_a39a9c21",
+    "type": "anonymous_message",
+    "senderId": 8209261178,
+    "senderUsername": "@Sasaha666",
+    "senderName": "user_918",
+    "receiverId": 8014507256,
+    "text": "Привет как дела",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "date": "2026-06-02T16:59:22.001Z",
+    "status": "sent",
+    "telegramMessageId": 325,
+    "canReply": false,
+    "replies": [
+      "reply_1780420453901_b5cfeee2"
+    ],
+    "answers": [
+      {
+        "id": "reply_1780420453901_b5cfeee2",
+        "questionMessageId": "msg_1780419548100_a39a9c21",
+        "questionText": "Привет как дела",
+        "answerText": "привет нормально",
+        "answeredBy": 8014507256,
+        "sentTo": 8209261178,
+        "date": "2026-06-02T17:14:15.627Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "msg_1780419548101_27c18d5b",
+    "type": "anonymous_message",
+    "senderId": 8209261178,
+    "senderUsername": "@Sasaha666",
+    "senderName": "user_918",
+    "receiverId": 8014507256,
+    "text": "Ты мне давно нравишься давай встречаться",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "date": "2026-06-02T16:59:22.093Z",
+    "status": "sent",
+    "telegramMessageId": 327,
+    "canReply": false,
+    "replies": [
+      "reply_1780420445525_801f2b9b"
+    ],
+    "answers": [
+      {
+        "id": "reply_1780420445525_801f2b9b",
+        "questionMessageId": "msg_1780419548101_27c18d5b",
+        "questionText": "Ты мне давно нравишься давай встречаться",
+        "answerText": "ахахах жесть",
+        "answeredBy": 8014507256,
+        "sentTo": 8209261178,
+        "date": "2026-06-02T17:14:05.715Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "msg_1780419548097_b029b59e",
+    "type": "anonymous_message",
+    "senderId": 1486279991,
+    "senderUsername": "@ZJDESIGN",
+    "senderName": "ZJ🏀",
+    "receiverId": 8014507256,
+    "text": "Бля так ссать хочется, вот бы нассать кому в РОТ БЛЯТЬ, ЧТОБЫ ЗАХЛЕБНУЛИСЬ И СДОХЛИ ТВАРИ🥰",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "date": "2026-06-02T16:59:22.270Z",
+    "status": "sent",
+    "telegramMessageId": 331,
+    "canReply": false,
+    "replies": [
+      "reply_1780420438131_87e64d6b"
+    ],
+    "answers": [
+      {
+        "id": "reply_1780420438131_87e64d6b",
+        "questionMessageId": "msg_1780419548097_b029b59e",
+        "questionText": "Бля так ссать хочется, вот бы нассать кому в РОТ БЛЯТЬ, ЧТОБЫ ЗАХЛЕБНУЛИСЬ И СДОХЛИ ТВАРИ🥰",
+        "answerText": "КТО БЫ ТЫ НЕ БЫЛ Я СОГЛАСНА В ТОБОЙ ВХАХХАХАХА",
+        "answeredBy": 8014507256,
+        "sentTo": 1486279991,
+        "date": "2026-06-02T17:13:59.149Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "reply_1780420438131_87e64d6b",
+    "type": "reply",
+    "originalMessageId": "msg_1780419548097_b029b59e",
+    "questionText": "Бля так ссать хочется, вот бы нассать кому в РОТ БЛЯТЬ, ЧТОБЫ ЗАХЛЕБНУЛИСЬ И СДОХЛИ ТВАРИ🥰",
+    "answerText": "КТО БЫ ТЫ НЕ БЫЛ Я СОГЛАСНА В ТОБОЙ ВХАХХАХАХА",
+    "fromId": 8014507256,
+    "toId": 1486279991,
+    "text": "КТО БЫ ТЫ НЕ БЫЛ Я СОГЛАСНА В ТОБОЙ ВХАХХАХАХА",
+    "date": "2026-06-02T17:13:59.149Z",
+    "status": "sent"
+  },
+  {
+    "id": "reply_1780420445525_801f2b9b",
+    "type": "reply",
+    "originalMessageId": "msg_1780419548101_27c18d5b",
+    "questionText": "Ты мне давно нравишься давай встречаться",
+    "answerText": "ахахах жесть",
+    "fromId": 8014507256,
+    "toId": 8209261178,
+    "text": "ахахах жесть",
+    "date": "2026-06-02T17:14:05.715Z",
+    "status": "sent"
+  },
+  {
+    "id": "reply_1780420453901_b5cfeee2",
+    "type": "reply",
+    "originalMessageId": "msg_1780419548100_a39a9c21",
+    "questionText": "Привет как дела",
+    "answerText": "привет нормально",
+    "fromId": 8014507256,
+    "toId": 8209261178,
+    "text": "привет нормально",
+    "date": "2026-06-02T17:14:15.627Z",
+    "status": "sent"
+  },
+  {
+    "id": "reply_1780420461951_5ee01c7c",
+    "type": "reply",
+    "originalMessageId": "msg_1780419548095_8e32765f",
+    "questionText": "Днх",
+    "answerText": "тре лох",
+    "fromId": 8014507256,
+    "toId": 8368731065,
+    "text": "тре лох",
+    "date": "2026-06-02T17:14:22.127Z",
+    "status": "sent"
+  },
+  {
+    "id": "reply_1780420469216_037a601c",
+    "type": "reply",
+    "originalMessageId": "msg_1780419548099_a4bbd4f1",
+    "questionText": "Ладно привет от Жабы!🐸",
+    "answerText": "прпр",
+    "fromId": 8014507256,
+    "toId": 1486279991,
+    "text": "прпр",
+    "date": "2026-06-02T17:14:30.127Z",
+    "status": "sent"
   }
 ]
