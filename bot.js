@@ -14,7 +14,10 @@ if (!BOT_TOKEN) {
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-const DATA_DIR = __dirname;
+const LEGACY_DATA_DIR = __dirname;
+const DATA_DIR = path.resolve(process.env.BOT_DATA_DIR || path.join(__dirname, "data"));
+ensureDataDirectory(DATA_DIR);
+
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const ANN_USERS_FILE = path.join(DATA_DIR, "annUsers.json");
 const MESSAGES_FILE = path.join(DATA_DIR, "messages.json");
@@ -100,10 +103,87 @@ function loadEnvFile() {
   }
 }
 
-function ensureFile(filePath, defaultValue) {
-  if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), "utf8");
+function ensureDataDirectory(dirPath) {
+  try {
+    fs.mkdirSync(dirPath, { recursive: true });
+  } catch (error) {
+    console.error(`❌ Save error: ${error.message}`);
+    process.exit(1);
   }
+}
+
+function flushDirectory(dirPath) {
+  let dirFd = null;
+
+  try {
+    dirFd = fs.openSync(dirPath, "r");
+    fs.fsyncSync(dirFd);
+  } catch {
+    // Some filesystems do not support directory fsync. File fsync still protects the JSON payload.
+  } finally {
+    if (dirFd !== null) {
+      try {
+        fs.closeSync(dirFd);
+      } catch {
+        // Nothing useful to do if closing the directory descriptor fails.
+      }
+    }
+  }
+}
+
+function writeJson(filePath, data) {
+  const dirPath = path.dirname(filePath);
+  const tempPath = path.join(dirPath, `${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
+  let fileFd = null;
+
+  try {
+    fs.mkdirSync(dirPath, { recursive: true });
+    fileFd = fs.openSync(tempPath, "w");
+    fs.writeFileSync(fileFd, JSON.stringify(data, null, 2), "utf8");
+    fs.fsyncSync(fileFd);
+    fs.closeSync(fileFd);
+    fileFd = null;
+    fs.renameSync(tempPath, filePath);
+    flushDirectory(dirPath);
+    return true;
+  } catch (error) {
+    if (fileFd !== null) {
+      try {
+        fs.closeSync(fileFd);
+      } catch {
+        // Ignore close errors after the original write failure.
+      }
+    }
+
+    try {
+      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+    } catch {
+      // Ignore cleanup errors after the original write failure.
+    }
+
+    console.error(`❌ Save error: ${filePath} - ${error.message}`);
+    return false;
+  }
+}
+
+function ensureFile(filePath, defaultValue) {
+  if (fs.existsSync(filePath)) return;
+
+  const legacyPath = path.join(LEGACY_DATA_DIR, path.basename(filePath));
+  if (DATA_DIR !== LEGACY_DATA_DIR && fs.existsSync(legacyPath)) {
+    try {
+      const raw = fs.readFileSync(legacyPath, "utf8");
+      const legacyData = raw.trim() ? JSON.parse(raw) : defaultValue;
+      if (writeJson(filePath, legacyData)) {
+        console.log(`📦 Migrated data file: ${path.basename(filePath)} -> ${DATA_DIR}`);
+        return;
+      }
+    } catch (error) {
+      console.error(`❌ Save error: ${filePath} - ${error.message}`);
+    }
+  }
+
+  writeJson(filePath, defaultValue);
 }
 
 function readJson(filePath, defaultValue) {
@@ -118,16 +198,6 @@ function readJson(filePath, defaultValue) {
   }
 }
 
-function writeJson(filePath, data) {
-  try {
-    const tempPath = `${filePath}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf8");
-    fs.renameSync(tempPath, filePath);
-  } catch (error) {
-    console.error(`Ошибка записи ${filePath}:`, error.message);
-  }
-}
-
 function loadData() {
   users = readJson(USERS_FILE, {});
   annUsers = readJson(ANN_USERS_FILE, {});
@@ -139,30 +209,35 @@ function loadData() {
   blockedUsers = readJson(BLOCKED_USERS_FILE, {});
   reactions = readJson(REACTIONS_FILE, {});
   normalizeRuntimeData();
+  logLoadedDataCounts();
 }
 
 function saveUsers() {
-  writeJson(USERS_FILE, users);
+  return writeJson(USERS_FILE, users);
 }
 
 function saveAnnUsers() {
-  writeJson(ANN_USERS_FILE, annUsers);
+  return writeJson(ANN_USERS_FILE, annUsers);
 }
 
-function saveMessages() {
-  writeJson(MESSAGES_FILE, messages);
+function saveMessages(options = {}) {
+  const saved = writeJson(MESSAGES_FILE, messages);
+  if (saved && options.messageId) console.log(`✅ Message saved: ${options.messageId}`);
+  return saved;
 }
 
-function saveAnswers() {
-  writeJson(ANSWERS_FILE, answers);
+function saveAnswers(options = {}) {
+  const saved = writeJson(ANSWERS_FILE, answers);
+  if (saved && options.replyId) console.log(`✅ Reply saved: ${options.replyId}`);
+  return saved;
 }
 
 function saveSupportMessages() {
-  writeJson(SUPPORT_FILE, supportMessages);
+  return writeJson(SUPPORT_FILE, supportMessages);
 }
 
 function saveStats() {
-  writeJson(STATS_FILE, stats);
+  return writeJson(STATS_FILE, stats);
 }
 
 function loadConversations() {
@@ -170,28 +245,61 @@ function loadConversations() {
   conversations = Array.isArray(data) ? data : [];
 }
 
-function saveConversations() {
-  writeJson(CONVERSATIONS_FILE, conversations);
+function saveConversations(options = {}) {
+  const saved = writeJson(CONVERSATIONS_FILE, conversations);
+  if (saved && options.conversationId) console.log(`✅ Conversation saved: ${options.conversationId}`);
+  return saved;
 }
 
-function saveBlockedUsers() {
-  writeJson(BLOCKED_USERS_FILE, blockedUsers);
+function saveBlockedUsers(options = {}) {
+  const saved = writeJson(BLOCKED_USERS_FILE, blockedUsers);
+  if (saved && options.userId) console.log(`✅ Block list saved: ${options.userId}`);
+  return saved;
 }
 
-function saveReactions() {
-  writeJson(REACTIONS_FILE, reactions);
+function saveReactions(options = {}) {
+  const saved = writeJson(REACTIONS_FILE, reactions);
+  if (saved && options.messageId) console.log(`✅ Reactions saved: ${options.messageId}`);
+  return saved;
 }
 
-function saveData() {
-  saveUsers();
-  saveAnnUsers();
-  saveMessages();
-  saveAnswers();
-  saveSupportMessages();
-  saveStats();
-  saveConversations();
-  saveBlockedUsers();
-  saveReactions();
+function saveData(options = {}) {
+  const results = [
+    saveUsers(),
+    saveAnnUsers(),
+    saveMessages(options),
+    saveAnswers(options),
+    saveSupportMessages(),
+    saveStats(),
+    saveConversations(options),
+    saveBlockedUsers(),
+    saveReactions(),
+  ];
+
+  return results.every(Boolean);
+}
+
+function logLoadedDataCounts() {
+  console.log(`📂 Loaded conversations: ${conversations.length}`);
+  console.log(`💌 Loaded messages: ${messages.length}`);
+  console.log(`✍️ Loaded answers: ${answers.length}`);
+}
+
+function isContainerRuntime() {
+  return (
+    fs.existsSync("/.dockerenv") ||
+    Boolean(process.env.P_SERVER_UUID || process.env.P_SERVER_ALLOCATION_LIMIT || process.env.container)
+  );
+}
+
+function logDataStorageInfo() {
+  console.log(`📁 Data directory: ${DATA_DIR}`);
+
+  if (isContainerRuntime() && !process.env.BOT_DATA_DIR) {
+    console.warn(
+      "⚠️ Container runtime detected. Set BOT_DATA_DIR to a mounted persistent directory to keep JSON data after container rebuilds."
+    );
+  }
 }
 
 function nowIso() {
@@ -764,8 +872,21 @@ function getConversationSenderInfo(conversation) {
   };
 }
 
-function formatConversationSenderBlock(conversation) {
-  if (!isAnnConversation(conversation)) return "";
+function getAnnConversationOwnerId(conversation) {
+  if (!isAnnConversation(conversation) || !conversation.user2) return "";
+  return String(conversation.user2);
+}
+
+function canViewConversationSenderInfo(conversation, viewerId, options = {}) {
+  if (!isAnnConversation(conversation)) return false;
+  if (options.admin) return true;
+
+  const ownerId = getAnnConversationOwnerId(conversation);
+  return Boolean(ownerId && String(viewerId) === ownerId);
+}
+
+function formatConversationSenderBlock(conversation, viewerId, options = {}) {
+  if (!canViewConversationSenderInfo(conversation, viewerId, options)) return "";
 
   const sender = getConversationSenderInfo(conversation);
   return `👤 Отправитель\nID: ${sender.id}\nUsername: ${sender.username}\nИмя: ${sender.name}`;
@@ -956,7 +1077,7 @@ function blockUser(userId, targetId) {
   const target = String(targetId);
   if (!blockedUsers[id]) blockedUsers[id] = [];
   if (!blockedUsers[id].includes(target)) blockedUsers[id].push(target);
-  saveBlockedUsers();
+  saveBlockedUsers({ userId: id });
 }
 
 function unblockUser(userId, targetId) {
@@ -965,7 +1086,7 @@ function unblockUser(userId, targetId) {
   if (!Array.isArray(blockedUsers[id])) return;
   blockedUsers[id] = blockedUsers[id].filter((item) => item !== target);
   if (!blockedUsers[id].length) delete blockedUsers[id];
-  saveBlockedUsers();
+  saveBlockedUsers({ userId: id });
 }
 
 function getReactionCount(messageId, emoji) {
@@ -976,7 +1097,7 @@ function addReaction(messageId, emoji) {
   const id = String(messageId);
   if (!reactions[id]) reactions[id] = {};
   reactions[id][emoji] = getReactionCount(id, emoji) + 1;
-  saveReactions();
+  saveReactions({ messageId: id });
 }
 
 function getMessageReactionTotal(messageId) {
@@ -1073,7 +1194,7 @@ function deleteConversation(conversationId) {
     delete reactions[messageId];
   }
 
-  saveData();
+  saveData({ conversationId: conversation.id });
   return true;
 }
 
@@ -1511,7 +1632,7 @@ async function handleAnonymousMessage(msg, state) {
 
   let sentToReceiver = null;
   const messageKeyboard = conversationMessageKeyboard(conversation.id, receiverId, conversationMessage.id);
-  const senderInfoBlock = formatConversationSenderBlock(conversation);
+  const senderInfoBlock = formatConversationSenderBlock(conversation, receiverId);
   const receiverText =
     `💌 Новое анонимное сообщение\n\n` +
     `💬 Сообщение:\n${text}` +
@@ -1551,7 +1672,7 @@ async function handleAnonymousMessage(msg, state) {
   if (annUsers[receiverId]) annUsers[receiverId].messagesReceived += 1;
   if (annUsers[senderId]) annUsers[senderId].messagesSent += 1;
 
-  saveData();
+  saveData({ messageId, conversationId: conversation.id });
   pendingAnonymousMessages.delete(senderId);
 
   await safeSendMessage(msg.chat.id, "✅ Ваше анонимное сообщение отправлено.");
@@ -1620,7 +1741,7 @@ async function handleReplyMessage(msg, state) {
     date,
   });
   const messageKeyboard = conversationMessageKeyboard(conversation.id, toId, conversationMessage.id);
-  const senderInfoBlock = formatConversationSenderBlock(conversation);
+  const senderInfoBlock = formatConversationSenderBlock(conversation, toId);
 
   const beautifulReplyText =
     `💌 Новое сообщение в анонимном диалоге\n\n` +
@@ -1688,7 +1809,7 @@ async function handleReplyMessage(msg, state) {
   if (annUsers[fromId]) annUsers[fromId].repliesSent += 1;
   if (annUsers[toId]) annUsers[toId].repliesReceived += 1;
 
-  saveData();
+  saveData({ messageId: replyId, replyId, conversationId: conversation.id });
   pendingReplies.delete(fromId);
 
   await safeSendMessage(msg.chat.id, "✅ Ответ отправлен");
@@ -1697,7 +1818,7 @@ async function handleReplyMessage(msg, state) {
 function formatConversationMessageLine(message, viewerId, index, isAdminView = false, conversation = null) {
   const text = truncateText(message.text || `[${message.contentType || "сообщение"}]`, isAdminView ? 1200 : 700);
   const date = formatDate(message.date);
-  const senderInfoBlock = formatConversationSenderBlock(conversation);
+  const senderInfoBlock = formatConversationSenderBlock(conversation, viewerId, { admin: isAdminView });
 
   if (isAdminView) {
     return (
@@ -2540,6 +2661,7 @@ process.on("SIGTERM", () => {
 
 async function startBot() {
   try {
+    logDataStorageInfo();
     loadData();
     const me = await bot.getMe();
     botUsername = me.username;

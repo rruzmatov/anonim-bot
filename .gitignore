@@ -1,4 +1,14 @@
 node_modules
 .env
+data/
+annUsers.json
+answers.json
+blockedUsers.json
+conversations.json
+messages.json
+reactions.json
+stats.json
+support.json
+users.json
 *.tmp
 .DS_Store
