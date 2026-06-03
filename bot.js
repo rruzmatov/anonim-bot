@@ -780,15 +780,27 @@ function findUserByCode(code) {
 }
 
 function findLinkDataByCode(code) {
-  if (!code) return null;
+  const normalizedCode = String(code || "").trim();
+  if (!normalizedCode) return null;
+
+  for (const annUser of Object.values(annUsers)) {
+    if (annUser.activeCode !== normalizedCode) continue;
+
+    const user = users[String(annUser.id)];
+    if (user) return { user, source: "ann" };
+  }
 
   for (const user of Object.values(users)) {
-    if (user.annCode === code || user.activeCode === code) {
+    if (user.annCode === normalizedCode) {
       return { user, source: "ann" };
     }
 
-    if (user.startCode === code) {
+    if (user.startCode === normalizedCode) {
       return { user, source: "start" };
+    }
+
+    if (user.activeCode === normalizedCode) {
+      return { user, source: annUsers[String(user.id)] ? "ann" : "start" };
     }
   }
 
@@ -1371,6 +1383,10 @@ async function showHelp(chatId, from) {
 }
 
 async function showAnnStart(chatId, from) {
+  pendingAnonymousMessages.delete(String(from.id));
+  pendingReplies.delete(String(from.id));
+  pendingSupportMessages.delete(String(from.id));
+
   const annUser = createOrUpdateAnnUser(from);
   await safeSendMessage(
     chatId,
@@ -2279,7 +2295,7 @@ async function exportJson(chatId, from) {
   }
 }
 
-bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
+bot.onText(/^\/start(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i, async (msg, match) => {
   try {
     const cooldownKey = String(msg.from.id);
     const now = Date.now();
@@ -2322,7 +2338,7 @@ bot.onText(/^\/cancel$/, async (msg) => {
   }
 });
 
-bot.onText(/^\/annstart$/, async (msg) => {
+bot.onText(/^\/annstart(?:@[A-Za-z0-9_]+)?$/i, async (msg) => {
   try {
     await showAnnStart(msg.chat.id, msg.from);
   } catch (error) {
