@@ -25,12 +25,7 @@ const CONVERSATIONS_FILE = path.join(DATA_DIR, "conversations.json");
 const BLOCKED_USERS_FILE = path.join(DATA_DIR, "blockedUsers.json");
 const REACTIONS_FILE = path.join(DATA_DIR, "reactions.json");
 const TELEGRAM_TEXT_LIMIT = 3900;
-const REACTION_TYPES = [
-  { code: "laugh", emoji: "😂", label: "Смешно" },
-  { code: "love", emoji: "❤️", label: "Мило" },
-  { code: "surprise", emoji: "😳", label: "Неожиданно" },
-  { code: "fire", emoji: "🔥", label: "Круто" },
-];
+const REACTION_EMOJIS = ["❤️", "🔥", "😍", "🥰", "😘", "🌹", "👏", "😂", "😳", "👍"];
 
 const BOT_DESCRIPTION =
   "💞 Анонимные сообщения\n\n" +
@@ -211,7 +206,7 @@ function randomHex(length = 8) {
 }
 
 function createId(prefix) {
-  return `${prefix}_${Date.now()}_${randomHex(8)}`;
+  return `${prefix}_${Date.now().toString(36)}_${randomHex(4)}`;
 }
 
 function normalizeRuntimeData() {
@@ -225,6 +220,7 @@ function normalizeRuntimeData() {
   normalizeBlockedUsers();
   normalizeReactions();
   migrateConversationsFromMessages();
+  normalizeConversationIdsForCallbackData();
 }
 
 function normalizeBlockedUsers() {
@@ -240,7 +236,7 @@ function normalizeBlockedUsers() {
 
 function normalizeReactions() {
   const normalized = {};
-  const allowedEmoji = new Set(REACTION_TYPES.map((item) => item.emoji));
+  const allowedEmoji = new Set(REACTION_EMOJIS);
 
   for (const [messageId, bucket] of Object.entries(reactions)) {
     if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) continue;
@@ -266,6 +262,10 @@ function migrateConversationsFromMessages() {
         id: String(conversation.id),
         user1: Number(conversation.user1),
         user2: Number(conversation.user2),
+        source: conversation.source || "start",
+        senderId: conversation.senderId ? Number(conversation.senderId) : null,
+        senderUsername: conversation.senderUsername || "",
+        senderName: conversation.senderName || "",
         createdAt: conversation.createdAt || nowIso(),
         lastActivity: conversation.lastActivity || conversation.createdAt || nowIso(),
         messages: Array.isArray(conversation.messages) ? conversation.messages : [],
@@ -281,6 +281,7 @@ function migrateConversationsFromMessages() {
           text: String(item.text || ""),
           contentType: item.contentType || "text",
           date: item.date || normalizedConversation.createdAt,
+          telegramMessageId: item.telegramMessageId ? Number(item.telegramMessageId) : null,
         }))
         .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
 
@@ -299,6 +300,10 @@ function migrateConversationsFromMessages() {
           id: conversationId,
           user1: Number(item.senderId),
           user2: Number(item.receiverId),
+          source: item.source || "start",
+          senderId: Number(item.senderId),
+          senderUsername: item.senderUsername || "",
+          senderName: item.senderName || "",
           createdAt: item.date || nowIso(),
           lastActivity: item.date || nowIso(),
           messages: [],
@@ -306,6 +311,13 @@ function migrateConversationsFromMessages() {
         conversations.push(conversation);
         conversationById.set(conversationId, conversation);
       }
+
+      updateConversationSenderInfo(conversationById.get(conversationId), {
+        source: item.source || "start",
+        senderId: item.senderId,
+        senderUsername: item.senderUsername,
+        senderName: item.senderName,
+      });
 
       item.conversationId = conversationId;
       originalToConversationId.set(item.id, conversationId);
@@ -317,6 +329,7 @@ function migrateConversationsFromMessages() {
         text: item.text || `[${item.contentType || "сообщение"}]`,
         contentType: item.contentType || "text",
         date: item.date || nowIso(),
+        telegramMessageId: item.telegramMessageId || null,
       });
     }
   }
@@ -331,6 +344,10 @@ function migrateConversationsFromMessages() {
         id: conversationId,
         user1: Number(item.fromId),
         user2: Number(item.toId),
+        source: "start",
+        senderId: Number(item.fromId),
+        senderUsername: "",
+        senderName: "",
         createdAt: item.date || nowIso(),
         lastActivity: item.date || nowIso(),
         messages: [],
@@ -348,10 +365,51 @@ function migrateConversationsFromMessages() {
       text: item.text || item.answerText || `[${item.contentType || "сообщение"}]`,
       contentType: item.contentType || "text",
       date: item.date || nowIso(),
+      telegramMessageId: item.telegramMessageId || null,
     });
   }
 
   conversations.sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0));
+}
+
+function normalizeConversationIdsForCallbackData() {
+  const usedIds = new Set(conversations.map((conversation) => String(conversation.id)));
+  const idMap = new Map();
+
+  for (const conversation of conversations) {
+    const currentId = String(conversation.id);
+    if (currentId.length <= 20) continue;
+
+    let newId;
+    do {
+      newId = createId("conv");
+    } while (usedIds.has(newId));
+
+    usedIds.delete(currentId);
+    usedIds.add(newId);
+    idMap.set(currentId, newId);
+    conversation.id = newId;
+  }
+
+  if (!idMap.size) return;
+
+  for (const conversation of conversations) {
+    if (!Array.isArray(conversation.messages)) conversation.messages = [];
+    for (const message of conversation.messages) {
+      const mappedConversationId = idMap.get(String(message.conversationId));
+      if (mappedConversationId) message.conversationId = mappedConversationId;
+    }
+  }
+
+  for (const item of messages) {
+    const mappedConversationId = idMap.get(String(item.conversationId || ""));
+    if (mappedConversationId) item.conversationId = mappedConversationId;
+  }
+
+  for (const item of answers) {
+    const mappedConversationId = idMap.get(String(item.conversationId || ""));
+    if (mappedConversationId) item.conversationId = mappedConversationId;
+  }
 }
 
 function formatDate(value) {
@@ -645,12 +703,76 @@ function getStoredMessageText(msg) {
   return text || `[${contentType}]`;
 }
 
-function createConversation(user1, user2) {
+function isTextMessage(msg) {
+  return getContentType(msg) === "text" && typeof msg.text === "string" && !msg.text.startsWith("/");
+}
+
+async function sendTextOnlyWarning(chatId) {
+  await safeSendMessage(
+    chatId,
+    "❌ Можно отправлять только текстовые сообщения.\n\n📝 Напишите сообщение текстом."
+  );
+}
+
+function normalizeUsername(username) {
+  if (!username || username === "нет username") return "нет username";
+  return String(username).startsWith("@") ? String(username) : `@${username}`;
+}
+
+function updateConversationSenderInfo(conversation, info = {}) {
+  if (!conversation) return;
+
+  const source = info.source || conversation.source || "start";
+  conversation.source = source;
+
+  if (info.senderId || !conversation.senderId) {
+    conversation.senderId = info.senderId ? Number(info.senderId) : conversation.senderId || null;
+  }
+
+  if (info.senderUsername || !conversation.senderUsername) {
+    conversation.senderUsername = normalizeUsername(info.senderUsername || conversation.senderUsername);
+  }
+
+  if (info.senderName || !conversation.senderName) {
+    conversation.senderName = info.senderName || conversation.senderName || "";
+  }
+}
+
+function isAnnConversation(conversation) {
+  return conversation && conversation.source === "ann";
+}
+
+function getConversationSenderInfo(conversation) {
+  const senderId = conversation && conversation.senderId ? String(conversation.senderId) : "";
+  const user = senderId ? users[senderId] : null;
+
+  return {
+    id: senderId || "—",
+    username: normalizeUsername(conversation.senderUsername || (user && user.username) || ""),
+    name:
+      conversation.senderName ||
+      (user ? [user.first_name, user.last_name].filter(Boolean).join(" ") : "") ||
+      "—",
+  };
+}
+
+function formatConversationSenderBlock(conversation) {
+  if (!isAnnConversation(conversation)) return "";
+
+  const sender = getConversationSenderInfo(conversation);
+  return `👤 Отправитель\nID: ${sender.id}\nUsername: ${sender.username}\nИмя: ${sender.name}`;
+}
+
+function createConversation(user1, user2, options = {}) {
   const date = nowIso();
   const conversation = {
     id: createId("conv"),
     user1: Number(user1),
     user2: Number(user2),
+    source: options.source || "start",
+    senderId: options.senderId ? Number(options.senderId) : Number(user1),
+    senderUsername: normalizeUsername(options.senderUsername || ""),
+    senderName: options.senderName || "",
     createdAt: date,
     lastActivity: date,
     messages: [],
@@ -664,6 +786,7 @@ function ensureConversationMessage(conversation, message) {
   if (!conversation) return null;
   if (!Array.isArray(conversation.messages)) conversation.messages = [];
 
+  const existing = conversation.messages.find((item) => item.id === String(message.id));
   const normalized = {
     id: String(message.id),
     conversationId: String(message.conversationId || conversation.id),
@@ -672,9 +795,14 @@ function ensureConversationMessage(conversation, message) {
     text: String(message.text || ""),
     contentType: message.contentType || "text",
     date: message.date || nowIso(),
+    telegramMessageId:
+      message.telegramMessageId !== undefined && message.telegramMessageId !== null
+        ? Number(message.telegramMessageId)
+        : existing && existing.telegramMessageId
+          ? Number(existing.telegramMessageId)
+          : null,
   };
 
-  const existing = conversation.messages.find((item) => item.id === normalized.id);
   if (existing) {
     Object.assign(existing, normalized);
   } else {
@@ -693,19 +821,6 @@ function ensureConversationMessage(conversation, message) {
 
 function findConversation(conversationId) {
   return conversations.find((conversation) => conversation.id === String(conversationId)) || null;
-}
-
-function findConversationMessage(messageId) {
-  const id = String(messageId);
-
-  for (const conversation of conversations) {
-    const message = Array.isArray(conversation.messages)
-      ? conversation.messages.find((item) => item.id === id)
-      : null;
-    if (message) return { conversation, message };
-  }
-
-  return null;
 }
 
 function isConversationParticipant(conversation, userId) {
@@ -759,6 +874,11 @@ function addReaction(messageId, emoji) {
   saveReactions();
 }
 
+function getMessageReactionTotal(messageId) {
+  const bucket = reactions[String(messageId)] || {};
+  return Object.values(bucket).reduce((sum, count) => sum + Number(count || 0), 0);
+}
+
 function getTotalReactionCount() {
   return Object.values(reactions).reduce((total, bucket) => {
     if (!bucket || typeof bucket !== "object") return total;
@@ -778,34 +898,100 @@ function getConversationMessagesTotal() {
   }, 0);
 }
 
-function buildReactionButton(messageId, reaction) {
-  const count = getReactionCount(messageId, reaction.emoji);
-  return {
-    text: count > 0 ? `${reaction.emoji} ${count}` : `${reaction.emoji} ${reaction.label}`,
-    callback_data: `react:${messageId}:${reaction.code}`,
-  };
+function getLatestInboundConversationMessage(conversation, userId) {
+  if (!conversation || !Array.isArray(conversation.messages)) return null;
+
+  return (
+    conversation.messages
+      .slice()
+      .reverse()
+      .find((message) => String(message.toId) === String(userId)) || null
+  );
 }
 
-function conversationMessageKeyboard(messageId, viewerId) {
-  const found = findConversationMessage(messageId);
-  const otherId = found ? getOtherConversationUserId(found.conversation, viewerId) : "";
+function findConversationMessageForCallback(query, conversation) {
+  if (!query || !query.message || !conversation || !Array.isArray(conversation.messages)) return null;
+
+  const telegramMessageId = String(query.message.message_id);
+  const userId = String(query.from.id);
+
+  return (
+    conversation.messages.find(
+      (message) =>
+        String(message.toId) === userId &&
+        message.telegramMessageId !== null &&
+        message.telegramMessageId !== undefined &&
+        String(message.telegramMessageId) === telegramMessageId
+    ) || getLatestInboundConversationMessage(conversation, userId)
+  );
+}
+
+function setConversationMessageTelegramId(conversation, messageId, telegramMessageId) {
+  if (!conversation || !telegramMessageId) return;
+  const message = Array.isArray(conversation.messages)
+    ? conversation.messages.find((item) => item.id === String(messageId))
+    : null;
+
+  if (message) {
+    message.telegramMessageId = Number(telegramMessageId);
+  }
+}
+
+function deleteConversation(conversationId) {
+  const conversation = findConversation(conversationId);
+  if (!conversation) return false;
+
+  const messageIds = new Set(
+    (Array.isArray(conversation.messages) ? conversation.messages : []).map((message) => String(message.id))
+  );
+
+  conversations = conversations.filter((item) => item.id !== String(conversationId));
+  messages = messages.filter((item) => {
+    return String(item.conversationId || "") !== String(conversationId) && !messageIds.has(String(item.id));
+  });
+  answers = answers.filter((item) => {
+    return String(item.conversationId || "") !== String(conversationId) && !messageIds.has(String(item.id));
+  });
+
+  for (const messageId of messageIds) {
+    delete reactions[messageId];
+  }
+
+  saveData();
+  return true;
+}
+
+function conversationMessageKeyboard(conversationId, viewerId, messageId = "") {
+  const conversation = findConversation(conversationId);
+  const otherId = conversation ? getOtherConversationUserId(conversation, viewerId) : "";
   const isBlockedByViewer = otherId ? hasBlocked(viewerId, otherId) : false;
-  const blockAction = isBlockedByViewer ? "unblock" : "block";
   const blockText = isBlockedByViewer ? "🔓 Разблокировать" : "🚫 Заблокировать";
 
   return {
     inline_keyboard: [
-      [{ text: "💬 Ответить", callback_data: `reply_to:${messageId}` }],
       [
-        buildReactionButton(messageId, REACTION_TYPES[0]),
-        buildReactionButton(messageId, REACTION_TYPES[1]),
+        { text: "💬 Ответить", callback_data: `reply_conv:${conversationId}` },
+        { text: "🎭 Реакция", callback_data: `reaction_menu:${conversationId}` },
       ],
       [
-        buildReactionButton(messageId, REACTION_TYPES[2]),
-        buildReactionButton(messageId, REACTION_TYPES[3]),
+        { text: blockText, callback_data: `block:${conversationId}` },
+        { text: "🗑 Удалить диалог", callback_data: `delete_dialog:${conversationId}` },
       ],
-      [{ text: "📜 История диалога", callback_data: `history:${found ? found.conversation.id : ""}` }],
-      [{ text: blockText, callback_data: `${blockAction}:${messageId}` }],
+    ],
+  };
+}
+
+function reactionMenuKeyboard(conversationId, messageId) {
+  return {
+    inline_keyboard: [
+      REACTION_EMOJIS.slice(0, 5).map((emoji) => ({
+        text: emoji,
+        callback_data: `reaction:${conversationId}:${messageId}:${emoji}`,
+      })),
+      REACTION_EMOJIS.slice(5).map((emoji) => ({
+        text: emoji,
+        callback_data: `reaction:${conversationId}:${messageId}:${emoji}`,
+      })),
     ],
   };
 }
@@ -1046,8 +1232,16 @@ async function showAnnBot(chatId, from) {
   const list = lastMessages.length
     ? lastMessages
       .map((item, index) => {
+        const conversation = findConversation(item.conversationId);
+        const sender = conversation && isAnnConversation(conversation)
+          ? getConversationSenderInfo(conversation)
+          : {
+              id: item.senderId,
+              username: normalizeUsername(item.senderUsername || ""),
+              name: item.senderName || "—",
+            };
         const text = item.text || `[${item.contentType || "сообщение"}]`;
-        return `${index + 1}. 👤 Отправитель:\n   ID: ${item.senderId}\n   Username: ${item.senderUsername || "нет username"}\n   Имя: ${item.senderName || "—"}\n   💬 Сообщение: ${text}\n   📅 Дата: ${formatDate(item.date)}`;
+        return `${index + 1}. 👤 Отправитель:\n   ID: ${sender.id}\n   Username: ${sender.username}\n   Имя: ${sender.name}\n   💬 Сообщение: ${text}\n   📅 Дата: ${formatDate(item.date)}\n   💬 Диалог: ${item.conversationId || "—"}`;
       })
       .join("\n\n")
     : "Пока сообщений нет.";
@@ -1107,10 +1301,16 @@ async function startSupport(chatId, from) {
 
 async function handleSupportMessage(msg) {
   const userId = String(msg.from.id);
+
+  if (!isTextMessage(msg)) {
+    await sendTextOnlyWarning(msg.chat.id);
+    return;
+  }
+
   const username = msg.from.username ? `@${msg.from.username}` : "нет username";
   const name = getDisplayName(msg.from);
-  const text = truncateText(getMessageText(msg) || `[${getContentType(msg)}]`, 2500);
-  const contentType = getContentType(msg);
+  const text = truncateText(getMessageText(msg), 2500);
+  const contentType = "text";
 
   if (!OWNER_ID) {
     pendingSupportMessages.delete(userId);
@@ -1136,10 +1336,6 @@ async function handleSupportMessage(msg) {
     OWNER_ID,
     `🛟 Написали в поддержку\n\n👤 Пользователь:\nID: ${userId}\nUsername: ${username}\nИмя: ${name}\n\n💬 Сообщение:\n${text}\n\n🕒 Время: ${formatDate(supportRecord.date)}`
   );
-
-  if (contentType !== "text") {
-    await safeCopyMessage(OWNER_ID, msg.chat.id, msg.message_id);
-  }
 
   pendingSupportMessages.delete(userId);
   await safeSendMessage(msg.chat.id, "✅ Ваше сообщение отправлено в поддержку.");
@@ -1170,10 +1366,20 @@ async function handleAnonymousMessage(msg, state) {
     return;
   }
 
-  const contentType = getContentType(msg);
+  if (!isTextMessage(msg)) {
+    await sendTextOnlyWarning(msg.chat.id);
+    return;
+  }
+
+  const contentType = "text";
   const text = getStoredMessageText(msg);
   const messageId = createId("msg");
-  const conversation = createConversation(senderId, receiverId);
+  const conversation = createConversation(senderId, receiverId, {
+    source: state.source || "start",
+    senderId: Number(senderId),
+    senderUsername,
+    senderName,
+  });
   const date = nowIso();
   const conversationMessage = ensureConversationMessage(conversation, {
     id: messageId,
@@ -1186,34 +1392,19 @@ async function handleAnonymousMessage(msg, state) {
   });
 
   let sentToReceiver = null;
-  const showSenderInfo = state.source === "ann";
-  const messageKeyboard = conversationMessageKeyboard(conversationMessage.id, receiverId);
+  const messageKeyboard = conversationMessageKeyboard(conversation.id, receiverId, conversationMessage.id);
+  const senderInfoBlock = formatConversationSenderBlock(conversation);
+  const receiverText =
+    `💌 Новое анонимное сообщение\n\n` +
+    `💬 Сообщение:\n${text}` +
+    (senderInfoBlock ? `\n\n${senderInfoBlock}` : "");
 
-  if (contentType === "text") {
-    const receiverText = showSenderInfo
-      ? `💌 Новое анонимное сообщение\n\n💬 Сообщение:\n${text}\n\n👤 Отправитель:\nID: ${senderId}\nUsername: ${senderUsername}\nИмя: ${senderName}`
-      : `💌 Новое анонимное сообщение\n\n💬 Сообщение:\n${text}`;
+  sentToReceiver = await safeSendMessage(receiverId, receiverText, {
+    reply_markup: messageKeyboard,
+  });
 
-    sentToReceiver = await safeSendMessage(
-      receiverId,
-      receiverText,
-      {
-        reply_markup: messageKeyboard,
-      }
-    );
-  } else {
-    const receiverText = showSenderInfo
-      ? `💌 Новое анонимное сообщение\n\n📎 Тип: ${contentType}\n\n👤 Отправитель:\nID: ${senderId}\nUsername: ${senderUsername}\nИмя: ${senderName}`
-      : `💌 Новое анонимное сообщение\n\n📎 Тип: ${contentType}`;
-
-    sentToReceiver = await safeSendMessage(
-      receiverId,
-      receiverText,
-      {
-        reply_markup: messageKeyboard,
-      }
-    );
-    await safeCopyMessage(receiverId, msg.chat.id, msg.message_id);
+  if (sentToReceiver) {
+    setConversationMessageTelegramId(conversation, conversationMessage.id, sentToReceiver.message_id);
   }
 
   const savedMessage = {
@@ -1226,7 +1417,7 @@ async function handleAnonymousMessage(msg, state) {
     text,
     contentType,
     source: state.source || "start",
-    senderInfoVisible: showSenderInfo,
+    senderInfoVisible: isAnnConversation(conversation),
     conversationId: conversation.id,
     date,
     status: sentToReceiver ? "sent" : "error",
@@ -1250,15 +1441,21 @@ async function handleAnonymousMessage(msg, state) {
 
 async function handleReplyMessage(msg, state) {
   const fromId = String(msg.from.id);
-  const found = findConversationMessage(state.originalMessageId);
+  const conversation = findConversation(state.conversationId);
 
-  if (!found) {
+  if (!conversation) {
     pendingReplies.delete(fromId);
-    await safeSendMessage(msg.chat.id, "❌ Сообщение для ответа не найдено.");
+    await safeSendMessage(msg.chat.id, "❌ Диалог уже удалён или недоступен.");
     return;
   }
 
-  const { conversation, message: original } = found;
+  const original = getLatestInboundConversationMessage(conversation, fromId);
+
+  if (!original) {
+    pendingReplies.delete(fromId);
+    await safeSendMessage(msg.chat.id, "❌ Нет входящего сообщения для ответа.");
+    return;
+  }
 
   if (!isConversationParticipant(conversation, fromId) && !isOwner(fromId)) {
     pendingReplies.delete(fromId);
@@ -1285,7 +1482,12 @@ async function handleReplyMessage(msg, state) {
     return;
   }
 
-  const contentType = getContentType(msg);
+  if (!isTextMessage(msg)) {
+    await sendTextOnlyWarning(msg.chat.id);
+    return;
+  }
+
+  const contentType = "text";
   const answerText = getStoredMessageText(msg);
   const questionText = original.text || `[${original.contentType || "сообщение"}]`;
   const replyId = createId("msg");
@@ -1299,10 +1501,12 @@ async function handleReplyMessage(msg, state) {
     contentType,
     date,
   });
-  const messageKeyboard = conversationMessageKeyboard(conversationMessage.id, toId);
+  const messageKeyboard = conversationMessageKeyboard(conversation.id, toId, conversationMessage.id);
+  const senderInfoBlock = formatConversationSenderBlock(conversation);
 
   const beautifulReplyText =
     `💌 Новое сообщение в анонимном диалоге\n\n` +
+    (senderInfoBlock ? `${senderInfoBlock}\n\n` : "") +
     `↩️ Ответ на:\n` +
     `${truncateText(questionText, 800)}\n\n` +
     `💬 Собеседник:\n` +
@@ -1310,26 +1514,19 @@ async function handleReplyMessage(msg, state) {
 
   let sentToReceiver = null;
 
-  if (contentType === "text") {
-    sentToReceiver = await safeSendMessage(toId, beautifulReplyText, {
-      reply_markup: messageKeyboard,
-    });
-  } else {
-    sentToReceiver = await safeSendMessage(
-      toId,
-      `💌 Новое сообщение в анонимном диалоге\n\n↩️ Ответ на:\n${truncateText(questionText, 800)}\n\n📎 Вложение ниже`,
-      {
-        reply_markup: messageKeyboard,
-      }
-    );
-    await safeCopyMessage(toId, msg.chat.id, msg.message_id);
+  sentToReceiver = await safeSendMessage(toId, beautifulReplyText, {
+    reply_markup: messageKeyboard,
+  });
+
+  if (sentToReceiver) {
+    setConversationMessageTelegramId(conversation, conversationMessage.id, sentToReceiver.message_id);
   }
 
   const reply = {
     id: replyId,
     type: "reply",
-    originalMessageId: original.id,
     conversationId: conversation.id,
+    replyToMessageId: original.id,
     questionText,
     answerText,
     fromId: Number(fromId),
@@ -1341,7 +1538,7 @@ async function handleReplyMessage(msg, state) {
     telegramMessageId: sentToReceiver ? sentToReceiver.message_id : null,
   };
 
-  const legacyOriginal = messages.find((item) => item.id === state.originalMessageId);
+  const legacyOriginal = messages.find((item) => item.id === original.id);
   if (legacyOriginal) {
     if (!Array.isArray(legacyOriginal.replies)) legacyOriginal.replies = [];
     if (!Array.isArray(legacyOriginal.answers)) legacyOriginal.answers = [];
@@ -1379,21 +1576,23 @@ async function handleReplyMessage(msg, state) {
   await safeSendMessage(msg.chat.id, "✅ Ответ отправлен");
 }
 
-function formatConversationMessageLine(message, viewerId, index, isAdminView = false) {
+function formatConversationMessageLine(message, viewerId, index, isAdminView = false, conversation = null) {
   const text = truncateText(message.text || `[${message.contentType || "сообщение"}]`, isAdminView ? 1200 : 700);
   const date = formatDate(message.date);
+  const senderInfoBlock = formatConversationSenderBlock(conversation);
 
   if (isAdminView) {
     return (
       `${index}. ${date}\n` +
       `   👤 От: ${getUserShortInfo(message.fromId)}\n` +
       `   👥 Кому: ${getUserShortInfo(message.toId)}\n` +
+      (senderInfoBlock ? `   ${senderInfoBlock.replace(/\n/g, "\n   ")}\n` : "") +
       `   💬 ${text}`
     );
   }
 
   const author = String(message.fromId) === String(viewerId) ? "Вы" : "Собеседник";
-  return `${index}. ${author} • ${date}\n💬 ${text}`;
+  return `${index}. ${author} • ${date}\n${senderInfoBlock ? `${senderInfoBlock}\n` : ""}💬 ${text}`;
 }
 
 function formatConversationHistory(conversation, viewerId, options = {}) {
@@ -1413,7 +1612,7 @@ function formatConversationHistory(conversation, viewerId, options = {}) {
   const body = selectedMessages.length
     ? selectedMessages
         .map((message, index) => {
-          return formatConversationMessageLine(message, viewerId, index + 1, isAdminView);
+          return formatConversationMessageLine(message, viewerId, index + 1, isAdminView, conversation);
         })
         .join("\n\n")
     : "Сообщений пока нет.";
@@ -1425,7 +1624,7 @@ async function showConversationHistory(chatId, from, conversationId) {
   const conversation = findConversation(conversationId);
 
   if (!conversation) {
-    await safeSendMessage(chatId, "❌ Диалог не найден.");
+    await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
     return;
   }
 
@@ -1487,7 +1686,7 @@ async function showAdminConversationDetails(chatId, from, conversationId, messag
 
   const conversation = findConversation(conversationId);
   if (!conversation) {
-    await safeSendMessage(chatId, "❌ Диалог не найден.");
+    await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
     return;
   }
 
@@ -1915,19 +2114,23 @@ bot.on("callback_query", async (query) => {
     if (data === "change_link") return changeLink(chatId, from);
     if (data === "support") return startSupport(chatId, from);
 
-    if (data && data.startsWith("reply_to:")) {
-      const originalMessageId = data.split(":")[1];
-      const found = findConversationMessage(originalMessageId);
+    if (data && data.startsWith("reply_conv:")) {
+      const conversationId = data.slice("reply_conv:".length);
+      const conversation = findConversation(conversationId);
 
-      if (!found) {
-        await safeSendMessage(chatId, "❌ Сообщение не найдено.");
+      if (!conversation) {
+        await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
         return;
       }
 
-      const { conversation, message } = found;
-
-      if (!isConversationParticipant(conversation, from.id) || String(message.toId) !== String(from.id)) {
+      if (!isConversationParticipant(conversation, from.id)) {
         await safeSendMessage(chatId, "⛔ У вас нет доступа.");
+        return;
+      }
+
+      const message = getLatestInboundConversationMessage(conversation, from.id);
+      if (!message || String(message.toId) !== String(from.id)) {
+        await safeSendMessage(chatId, "❌ Нет входящего сообщения для ответа.");
         return;
       }
 
@@ -1935,7 +2138,7 @@ bot.on("callback_query", async (query) => {
         await safeSendMessage(
           chatId,
           hasBlocked(from.id, message.fromId)
-            ? "🚫 Вы заблокировали этого собеседника. Нажмите «🔓 Разблокировать» под сообщением, чтобы продолжить."
+            ? "🚫 Вы заблокировали этого собеседника. Нажмите «🔓 Разблокировать», чтобы продолжить."
             : "🚫 Этот собеседник заблокировал диалог. Ответить нельзя."
         );
         return;
@@ -1945,7 +2148,6 @@ bot.on("callback_query", async (query) => {
       pendingSupportMessages.delete(String(from.id));
 
       pendingReplies.set(String(from.id), {
-        originalMessageId,
         conversationId: conversation.id,
         createdAt: Date.now(),
       });
@@ -1954,19 +2156,50 @@ bot.on("callback_query", async (query) => {
       return;
     }
 
-    if (data && data.startsWith("react:")) {
-      const parts = data.split(":");
-      const messageIdForReaction = parts[1];
-      const reactionCode = parts[2];
-      const reaction = REACTION_TYPES.find((item) => item.code === reactionCode);
-      const found = findConversationMessage(messageIdForReaction);
+    if (data && data.startsWith("reaction_menu:")) {
+      const conversationId = data.slice("reaction_menu:".length);
+      const conversation = findConversation(conversationId);
 
-      if (!reaction || !found) {
-        await safeSendMessage(chatId, "❌ Реакция недоступна.");
+      if (!conversation) {
+        await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
         return;
       }
 
-      const { conversation, message } = found;
+      if (!isConversationParticipant(conversation, from.id)) {
+        await safeSendMessage(chatId, "⛔ У вас нет доступа.");
+        return;
+      }
+
+      const message = findConversationMessageForCallback(query, conversation);
+      if (!message || String(message.toId) !== String(from.id)) {
+        await safeSendMessage(chatId, "❌ Сообщение для реакции не найдено.");
+        return;
+      }
+
+      await safeEditMessageReplyMarkup(chatId, query.message.message_id, reactionMenuKeyboard(conversation.id, message.id));
+      return;
+    }
+
+    if (data && data.startsWith("reaction:")) {
+      const parts = data.split(":");
+      const conversationId = parts[1];
+      const messageIdForReaction = parts[2];
+      const emoji = parts.slice(3).join(":");
+      const conversation = findConversation(conversationId);
+
+      if (!conversation) {
+        await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
+        return;
+      }
+
+      const message = Array.isArray(conversation.messages)
+        ? conversation.messages.find((item) => item.id === String(messageIdForReaction))
+        : null;
+
+      if (!REACTION_EMOJIS.includes(emoji) || !message) {
+        await safeSendMessage(chatId, "❌ Сообщение для реакции не найдено.");
+        return;
+      }
 
       if (!isConversationParticipant(conversation, from.id) || String(message.toId) !== String(from.id)) {
         await safeSendMessage(chatId, "⛔ У вас нет доступа.");
@@ -1974,35 +2207,33 @@ bot.on("callback_query", async (query) => {
       }
 
       if (isCommunicationBlocked(from.id, message.fromId)) {
-        await safeSendMessage(chatId, "🚫 Реакция недоступна: диалог заблокирован.");
+        await safeSendMessage(chatId, "🚫 Диалог заблокирован. Реакцию отправить нельзя.");
         return;
       }
 
-      addReaction(messageIdForReaction, reaction.emoji);
+      addReaction(message.id, emoji);
       await safeEditMessageReplyMarkup(
         chatId,
         query.message.message_id,
-        conversationMessageKeyboard(messageIdForReaction, from.id)
+        conversationMessageKeyboard(conversation.id, from.id, message.id)
       );
 
       await safeSendMessage(
         message.fromId,
-        `🎭 На ваше сообщение отреагировали\n\n${reaction.emoji} ${reaction.label}`
+        `🎭 На ваше сообщение отреагировали\n\n💬 Ваше сообщение:\n${truncateText(message.text, 1200)}\n\n${emoji}`
       );
       return;
     }
 
-    if (data && (data.startsWith("block:") || data.startsWith("unblock:"))) {
-      const action = data.split(":")[0];
-      const sourceMessageId = data.split(":")[1];
-      const found = findConversationMessage(sourceMessageId);
+    if (data && data.startsWith("block:")) {
+      const conversationId = data.slice("block:".length);
+      const conversation = findConversation(conversationId);
 
-      if (!found) {
-        await safeSendMessage(chatId, "❌ Диалог не найден.");
+      if (!conversation) {
+        await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
         return;
       }
 
-      const { conversation } = found;
       if (!isConversationParticipant(conversation, from.id)) {
         await safeSendMessage(chatId, "⛔ У вас нет доступа.");
         return;
@@ -2014,35 +2245,47 @@ bot.on("callback_query", async (query) => {
         return;
       }
 
-      if (action === "block") {
-        blockUser(from.id, otherId);
-        pendingReplies.delete(String(from.id));
+      if (hasBlocked(from.id, otherId)) {
+        unblockUser(from.id, otherId);
         await safeEditMessageReplyMarkup(
           chatId,
           query.message.message_id,
-          conversationMessageKeyboard(sourceMessageId, from.id)
+          conversationMessageKeyboard(conversation.id, from.id)
         );
-        await safeSendMessage(chatId, "🚫 Вы заблокировали этого собеседника", {
-          reply_markup: {
-            inline_keyboard: [[{ text: "🔓 Разблокировать", callback_data: `unblock:${sourceMessageId}` }]],
-          },
-        });
+        await safeSendMessage(chatId, "🔓 Собеседник разблокирован. Диалог снова доступен.");
         return;
       }
 
-      unblockUser(from.id, otherId);
+      blockUser(from.id, otherId);
+      pendingReplies.delete(String(from.id));
       await safeEditMessageReplyMarkup(
         chatId,
         query.message.message_id,
-        conversationMessageKeyboard(sourceMessageId, from.id)
+        conversationMessageKeyboard(conversation.id, from.id)
       );
-      await safeSendMessage(chatId, "🔓 Собеседник разблокирован. Диалог снова доступен.");
+      await safeSendMessage(chatId, "🚫 Вы заблокировали этого собеседника");
       return;
     }
 
-    if (data && data.startsWith("history:")) {
-      const conversationId = data.slice("history:".length);
-      return showConversationHistory(chatId, from, conversationId);
+    if (data && data.startsWith("delete_dialog:")) {
+      const conversationId = data.slice("delete_dialog:".length);
+      const conversation = findConversation(conversationId);
+
+      if (!conversation) {
+        await safeSendMessage(chatId, "🗑 Диалог уже удалён.");
+        return;
+      }
+
+      if (!isConversationParticipant(conversation, from.id) && !isOwner(from.id)) {
+        await safeSendMessage(chatId, "⛔ У вас нет доступа.");
+        return;
+      }
+
+      deleteConversation(conversation.id);
+      pendingReplies.delete(String(from.id));
+      await safeEditMessageReplyMarkup(chatId, query.message.message_id, { inline_keyboard: [] });
+      await safeSendMessage(chatId, "🗑 Диалог удалён.");
+      return;
     }
 
     if (data === "admin_users") return showAdminUsers(chatId, from, messageId);
