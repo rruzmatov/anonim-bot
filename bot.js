@@ -859,13 +859,29 @@ function findConversationByTelegramMessage(query) {
   const telegramMessageId = String(query.message.message_id);
   const userId = String(query.from.id);
 
+  const exactConversation = conversations.find((conversation) => {
+    return (
+      Array.isArray(conversation.messages) &&
+      conversation.messages.some((message) => {
+        return (
+          String(message.toId) === userId &&
+          message.telegramMessageId !== null &&
+          message.telegramMessageId !== undefined &&
+          String(message.telegramMessageId) === telegramMessageId
+        );
+      })
+    );
+  });
+
+  if (exactConversation) return exactConversation;
+
   return (
     conversations.find((conversation) => {
+      if (!isConversationParticipant(conversation, userId)) return false;
       return (
         Array.isArray(conversation.messages) &&
         conversation.messages.some((message) => {
           return (
-            String(message.toId) === userId &&
             message.telegramMessageId !== null &&
             message.telegramMessageId !== undefined &&
             String(message.telegramMessageId) === telegramMessageId
@@ -876,11 +892,38 @@ function findConversationByTelegramMessage(query) {
   );
 }
 
+function findConversationByLatestInboundMessage(userId) {
+  const id = String(userId || "");
+  if (!id) return null;
+
+  let bestConversation = null;
+  let bestDate = 0;
+
+  for (const conversation of conversations) {
+    if (!isConversationParticipant(conversation, id) || !Array.isArray(conversation.messages)) continue;
+
+    const latestInbound = conversation.messages
+      .filter((message) => String(message.toId) === id)
+      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))[0];
+
+    if (!latestInbound) continue;
+
+    const timestamp = new Date(latestInbound.date || 0).getTime();
+    if (!bestConversation || timestamp >= bestDate) {
+      bestConversation = conversation;
+      bestDate = timestamp;
+    }
+  }
+
+  return bestConversation;
+}
+
 function resolveConversationForCallback(conversationId, query, messageId = "") {
   return (
     findConversation(conversationId) ||
+    findConversationByTelegramMessage(query) ||
     findConversationByMessageId(messageId) ||
-    findConversationByTelegramMessage(query)
+    findConversationByLatestInboundMessage(query && query.from ? query.from.id : "")
   );
 }
 
@@ -2268,9 +2311,11 @@ bot.on("callback_query", async (query) => {
           await safeSendMessage(chatId, "❌ Сообщение для реакции не найдено.");
           return;
         }
+
+        message = fallbackMessage;
       }
 
-      await safeEditMessageReplyMarkup(chatId, query.message.message_id, reactionMenuKeyboard(conversation.id, message && message.id));
+      await safeEditMessageReplyMarkup(chatId, query.message.message_id, reactionMenuKeyboard(conversation.id, message.id));
       return;
     }
 
