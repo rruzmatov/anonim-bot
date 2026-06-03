@@ -374,7 +374,7 @@ function migrateConversationsFromMessages() {
           : [],
         user1: Number(conversation.user1),
         user2: Number(conversation.user2),
-        source: conversation.source || "start",
+        source: normalizeConversationSource(conversation.source),
         senderId: conversation.senderId ? Number(conversation.senderId) : null,
         senderUsername: conversation.senderUsername || "",
         senderName: conversation.senderName || "",
@@ -413,7 +413,7 @@ function migrateConversationsFromMessages() {
           aliases: [],
           user1: Number(item.senderId),
           user2: Number(item.receiverId),
-          source: item.source || "start",
+          source: normalizeConversationSource(item.source),
           senderId: Number(item.senderId),
           senderUsername: item.senderUsername || "",
           senderName: item.senderName || "",
@@ -426,7 +426,7 @@ function migrateConversationsFromMessages() {
       }
 
       updateConversationSenderInfo(conversationById.get(conversationId), {
-        source: item.source || "start",
+        source: item.source,
         senderId: item.senderId,
         senderUsername: item.senderUsername,
         senderName: item.senderName,
@@ -672,8 +672,12 @@ function ensureSeparateCodeForUser(userId, codeField) {
   return user[codeField];
 }
 
-function buildLink(code) {
-  return `https://t.me/${botUsername}?start=${code}`;
+function buildStartLink(code) {
+  return `https://t.me/${botUsername}?start=s_${code}`;
+}
+
+function buildAnnLink(code) {
+  return `https://t.me/${botUsername}?start=a_${code}`;
 }
 
 function createOrUpdateUser(from, options = {}) {
@@ -709,14 +713,14 @@ function createOrUpdateUser(from, options = {}) {
 
   if (options.ensureCode && !users[id].activeCode) {
     users[id].activeCode = createUniqueCode();
-    users[id].link = buildLink(users[id].activeCode);
+    users[id].link = buildAnnLink(users[id].activeCode);
   }
 
   if (!users[id].oldCodes) users[id].oldCodes = [];
   if (!users[id].startCode) users[id].startCode = "";
   if (!users[id].annCode) users[id].annCode = "";
-  users[id].startLink = users[id].startCode ? buildLink(users[id].startCode) : "";
-  users[id].annLink = users[id].annCode ? buildLink(users[id].annCode) : "";
+  users[id].startLink = users[id].startCode ? buildStartLink(users[id].startCode) : "";
+  users[id].annLink = users[id].annCode ? buildAnnLink(users[id].annCode) : "";
 
   createStatsIfMissing(id);
   saveUsers();
@@ -730,11 +734,9 @@ function createOrUpdateAnnUser(from) {
   const id = String(from.id);
   const date = nowIso();
   const annCode = ensureSeparateCodeForUser(id, "annCode");
-  const annLink = buildLink(annCode);
+  const annLink = buildAnnLink(annCode);
 
   users[id].annLink = annLink;
-  users[id].link = annLink;
-  users[id].activeCode = annCode;
   saveUsers();
 
   if (!annUsers[id]) {
@@ -780,27 +782,28 @@ function findUserByCode(code) {
 }
 
 function findLinkDataByCode(code) {
-  const normalizedCode = String(code || "").trim();
-  if (!normalizedCode) return null;
+  if (!code) return null;
 
-  for (const annUser of Object.values(annUsers)) {
-    if (annUser.activeCode !== normalizedCode) continue;
+  let source = null;
+  let realCode = code;
 
-    const user = users[String(annUser.id)];
-    if (user) return { user, source: "ann" };
+  if (code.startsWith("a_")) {
+    source = "ann";
+    realCode = code.slice(2);
+  } else if (code.startsWith("s_")) {
+    source = "start";
+    realCode = code.slice(2);
   }
 
+  if (!source) return null;
+
   for (const user of Object.values(users)) {
-    if (user.annCode === normalizedCode) {
+    if (source === "ann" && user.annCode === realCode) {
       return { user, source: "ann" };
     }
 
-    if (user.startCode === normalizedCode) {
+    if (source === "start" && user.startCode === realCode) {
       return { user, source: "start" };
-    }
-
-    if (user.activeCode === normalizedCode) {
-      return { user, source: annUsers[String(user.id)] ? "ann" : "start" };
     }
   }
 
@@ -847,10 +850,14 @@ function normalizeUsername(username) {
   return String(username).startsWith("@") ? String(username) : `@${username}`;
 }
 
+function normalizeConversationSource(source) {
+  return String(source || "").trim() === "ann" ? "ann" : "start";
+}
+
 function updateConversationSenderInfo(conversation, info = {}) {
   if (!conversation) return;
 
-  const source = info.source || conversation.source || "start";
+  const source = normalizeConversationSource(info.source || conversation.source);
   conversation.source = source;
 
   if (info.senderId || !conversation.senderId) {
@@ -867,7 +874,7 @@ function updateConversationSenderInfo(conversation, info = {}) {
 }
 
 function isAnnConversation(conversation) {
-  return conversation && conversation.source === "ann";
+  return conversation && normalizeConversationSource(conversation.source) === "ann";
 }
 
 function getConversationSenderInfo(conversation) {
@@ -895,19 +902,25 @@ function getAnnConversationSenderId(conversation) {
 }
 
 function canViewConversationSenderInfo(conversation, viewerId, options = {}) {
-  if (!isAnnConversation(conversation)) return false;
+  if (!options.initialAnonymousMessage) return false;
+
   const viewer = String(viewerId || "");
   const senderId = getAnnConversationSenderId(conversation);
-
-  if (senderId && viewer === senderId) return false;
-  if (options.admin) return true;
-
   const ownerId = getAnnConversationOwnerId(conversation);
-  return Boolean(ownerId && viewer === ownerId);
+  const source = normalizeConversationSource(conversation && conversation.source);
+
+  if (source !== "ann") return false;
+  if (options.admin) return true;
+  if (ownerId && viewer === ownerId) return true;
+  if (senderId && viewer === senderId) return false;
+
+  return false;
 }
 
 function formatConversationSenderBlock(conversation, viewerId, options = {}) {
-  if (!canViewConversationSenderInfo(conversation, viewerId, options)) return "";
+  if (!canViewConversationSenderInfo(conversation, viewerId, options)) {
+    return "";
+  }
 
   const sender = getConversationSenderInfo(conversation);
   return `👤 Отправитель\nID: ${sender.id}\nUsername: ${sender.username}\nИмя: ${sender.name}`;
@@ -915,12 +928,13 @@ function formatConversationSenderBlock(conversation, viewerId, options = {}) {
 
 function createConversation(user1, user2, options = {}) {
   const date = nowIso();
+  const source = normalizeConversationSource(options.source);
   const conversation = {
     id: createId("conv"),
     aliases: [],
     user1: Number(user1),
     user2: Number(user2),
-    source: options.source || "start",
+    source,
     senderId: options.senderId ? Number(options.senderId) : Number(user1),
     senderUsername: normalizeUsername(options.senderUsername || ""),
     senderName: options.senderName || "",
@@ -1365,7 +1379,7 @@ async function showNormalStart(chatId, from) {
 
   const user = createOrUpdateUser(from);
   const startCode = ensureSeparateCodeForUser(user.id, "startCode");
-  const startLink = buildLink(startCode);
+  const startLink = buildStartLink(startCode);
 
   users[String(user.id)].startLink = startLink;
   saveUsers();
@@ -1387,10 +1401,15 @@ async function showAnnStart(chatId, from) {
   pendingReplies.delete(String(from.id));
   pendingSupportMessages.delete(String(from.id));
 
-  const annUser = createOrUpdateAnnUser(from);
+  createOrUpdateAnnUser(from);
+  const annCode = ensureSeparateCodeForUser(from.id, "annCode");
+  const annLink = buildAnnLink(annCode);
+  users[String(from.id)].annLink = annLink;
+  saveUsers();
+
   await safeSendMessage(
     chatId,
-    `${ANN_GREETING}\n\n🔗 ${annUser.link}\n\n☝️ Запость эту ссылку в Telegram-канале, профиле или отправь друзьям.`,
+    `${ANN_GREETING}\n\n🔗 ${annLink}\n\n☝️ Запость эту ссылку в Telegram-канале, профиле или отправь друзьям.`,
     { reply_markup: annKeyboard() }
   );
 }
@@ -1399,6 +1418,8 @@ async function handleStartWithCode(chatId, from, code) {
   createOrUpdateUser(from);
 
   const linkData = findLinkDataByCode(code);
+  console.log("START CODE:", code);
+  console.log("LINK DATA:", linkData);
   if (!linkData) {
     await safeSendMessage(chatId, "❌ Эта ссылка больше не работает.");
     return;
@@ -1426,10 +1447,9 @@ async function handleStartWithCode(chatId, from, code) {
 
   pendingAnonymousMessages.set(String(from.id), {
     receiverId: String(receiver.id),
-    code,
     source: linkData.source,
-    createdAt: Date.now(),
   });
+  console.log("PENDING STATE:", pendingAnonymousMessages.get(String(from.id)));
 
   await safeSendMessage(chatId, "💌 Напиши анонимное сообщение.\nПолучатель не узнает, кто ты.");
 }
@@ -1464,15 +1484,15 @@ async function showUserStats(chatId, from) {
   await safeSendMessage(
     chatId,
     `📊 Статистика\n\n` +
-      `👥 Перешли по ссылке: ${userStats.linkClicks}\n` +
-      `💌 Получено сообщений: ${userStats.messagesReceived}\n` +
-      `📨 Отправлено сообщений: ${userStats.messagesSent}\n` +
-      `✍️ Отправлено ответов: ${userStats.repliesSent}\n` +
-      `💬 Получено ответов: ${userStats.repliesReceived}\n\n` +
-      `💬 Всего диалогов: ${userConversations.length}\n` +
-      `💌 Всего сообщений в диалогах: ${userConversationMessages}\n` +
-      `🎭 Реакций на ваши сообщения: ${userReactionCount}\n` +
-      `🚫 Заблокировано собеседников: ${blockedCount}`
+    `👥 Перешли по ссылке: ${userStats.linkClicks}\n` +
+    `💌 Получено сообщений: ${userStats.messagesReceived}\n` +
+    `📨 Отправлено сообщений: ${userStats.messagesSent}\n` +
+    `✍️ Отправлено ответов: ${userStats.repliesSent}\n` +
+    `💬 Получено ответов: ${userStats.repliesReceived}\n\n` +
+    `💬 Всего диалогов: ${userConversations.length}\n` +
+    `💌 Всего сообщений в диалогах: ${userConversationMessages}\n` +
+    `🎭 Реакций на ваши сообщения: ${userReactionCount}\n` +
+    `🚫 Заблокировано собеседников: ${blockedCount}`
   );
 }
 
@@ -1500,10 +1520,10 @@ async function showAnnBot(chatId, from) {
         const sender = conversation && isAnnConversation(conversation)
           ? getConversationSenderInfo(conversation)
           : {
-              id: item.senderId,
-              username: normalizeUsername(item.senderUsername || ""),
-              name: item.senderName || "—",
-            };
+            id: item.senderId,
+            username: normalizeUsername(item.senderUsername || ""),
+            name: item.senderName || "—",
+          };
         const text = item.text || `[${item.contentType || "сообщение"}]`;
         return `${index + 1}. 👤 Отправитель:\n   ID: ${sender.id}\n   Username: ${sender.username}\n   Имя: ${sender.name}\n   💬 Сообщение: ${text}\n   📅 Дата: ${formatDate(item.date)}\n   💬 Диалог: ${item.conversationId || "—"}`;
       })
@@ -1522,11 +1542,11 @@ async function changeLink(chatId, from) {
   const newCode = createUniqueCode();
 
   if (oldCode) user.oldCodes.push(oldCode);
-  user.activeCode = newCode;
   user.annCode = newCode;
-  user.link = buildLink(newCode);
-  user.annLink = buildLink(newCode);
-  user.lastActive = nowIso();
+  user.annLink = buildAnnLink(newCode);
+
+  user.activeCode = user.annCode;
+  user.link = user.annLink;
 
   users[String(from.id)] = user;
   saveUsers();
@@ -1612,6 +1632,7 @@ async function handleAnonymousMessage(msg, state) {
   const senderName = getDisplayName(sender);
   const receiverId = String(state.receiverId);
   const receiverUser = users[receiverId];
+  state.source = normalizeConversationSource(state.source);
 
   if (!receiverUser) {
     pendingAnonymousMessages.delete(senderId);
@@ -1638,12 +1659,16 @@ async function handleAnonymousMessage(msg, state) {
   const contentType = "text";
   const text = getStoredMessageText(msg);
   const messageId = createId("msg");
+  console.log("SENDER:", senderId);
+  console.log("RECEIVER:", receiverId);
+  console.log("STATE SOURCE:", state.source);
   const conversation = createConversation(senderId, receiverId, {
-    source: state.source || "start",
+    source: state.source,
     senderId: Number(senderId),
     senderUsername,
     senderName,
   });
+  console.log("CONVERSATION SOURCE:", conversation.source);
   const date = nowIso();
   const conversationMessage = ensureConversationMessage(conversation, {
     id: messageId,
@@ -1657,12 +1682,15 @@ async function handleAnonymousMessage(msg, state) {
 
   let sentToReceiver = null;
   const messageKeyboard = conversationMessageKeyboard(conversation.id, receiverId, conversationMessage.id);
-  const senderInfoBlock = formatConversationSenderBlock(conversation, receiverId);
+  const senderInfoBlock = formatConversationSenderBlock(conversation, receiverId, {
+    initialAnonymousMessage: true,
+  });
   const receiverText =
     `💌 Новое анонимное сообщение\n\n` +
     `💬 Сообщение:\n${text}` +
     (senderInfoBlock ? `\n\n${senderInfoBlock}` : "");
 
+  console.log("SOURCE =", state.source);
   sentToReceiver = await safeSendMessage(receiverId, receiverText, {
     reply_markup: messageKeyboard,
   });
@@ -1680,7 +1708,7 @@ async function handleAnonymousMessage(msg, state) {
     receiverId: Number(receiverId),
     text,
     contentType,
-    source: state.source || "start",
+    source: state.source,
     senderInfoVisible: isAnnConversation(conversation),
     conversationId: conversation.id,
     date,
@@ -1766,11 +1794,9 @@ async function handleReplyMessage(msg, state) {
     date,
   });
   const messageKeyboard = conversationMessageKeyboard(conversation.id, toId, conversationMessage.id);
-  const senderInfoBlock = formatConversationSenderBlock(conversation, toId);
 
   const beautifulReplyText =
     `💌 Новое сообщение в анонимном диалоге\n\n` +
-    (senderInfoBlock ? `${senderInfoBlock}\n\n` : "") +
     `↩️ Ответ на:\n` +
     `${truncateText(questionText, 800)}\n\n` +
     `💬 Собеседник:\n` +
@@ -1843,20 +1869,18 @@ async function handleReplyMessage(msg, state) {
 function formatConversationMessageLine(message, viewerId, index, isAdminView = false, conversation = null) {
   const text = truncateText(message.text || `[${message.contentType || "сообщение"}]`, isAdminView ? 1200 : 700);
   const date = formatDate(message.date);
-  const senderInfoBlock = formatConversationSenderBlock(conversation, viewerId, { admin: isAdminView });
 
   if (isAdminView) {
     return (
       `${index}. ${date}\n` +
       `   👤 От: ${getUserShortInfo(message.fromId)}\n` +
       `   👥 Кому: ${getUserShortInfo(message.toId)}\n` +
-      (senderInfoBlock ? `   ${senderInfoBlock.replace(/\n/g, "\n   ")}\n` : "") +
       `   💬 ${text}`
     );
   }
 
   const author = String(message.fromId) === String(viewerId) ? "Вы" : "Собеседник";
-  return `${index}. ${author} • ${date}\n${senderInfoBlock ? `${senderInfoBlock}\n` : ""}💬 ${text}`;
+  return `${index}. ${author} • ${date}\n💬 ${text}`;
 }
 
 function formatConversationHistory(conversation, viewerId, options = {}) {
@@ -1866,19 +1890,19 @@ function formatConversationHistory(conversation, viewerId, options = {}) {
   const selectedMessages = isAdminView ? allMessages : allMessages.slice(-limit);
   const header = isAdminView
     ? `📂 Диалог ${conversation.id}\n\n` +
-      `👤 Участник 1: ${getUserShortInfo(conversation.user1)}\n` +
-      `👤 Участник 2: ${getUserShortInfo(conversation.user2)}\n` +
-      `💌 Сообщений: ${allMessages.length}\n` +
-      `🕒 Создан: ${formatDate(conversation.createdAt)}\n` +
-      `🕒 Активность: ${formatDate(conversation.lastActivity)}`
+    `👤 Участник 1: ${getUserShortInfo(conversation.user1)}\n` +
+    `👤 Участник 2: ${getUserShortInfo(conversation.user2)}\n` +
+    `💌 Сообщений: ${allMessages.length}\n` +
+    `🕒 Создан: ${formatDate(conversation.createdAt)}\n` +
+    `🕒 Активность: ${formatDate(conversation.lastActivity)}`
     : `📜 История диалога\n\n💌 Последние ${Math.min(limit, allMessages.length)} сообщений`;
 
   const body = selectedMessages.length
     ? selectedMessages
-        .map((message, index) => {
-          return formatConversationMessageLine(message, viewerId, index + 1, isAdminView, conversation);
-        })
-        .join("\n\n")
+      .map((message, index) => {
+        return formatConversationMessageLine(message, viewerId, index + 1, isAdminView, conversation);
+      })
+      .join("\n\n")
     : "Сообщений пока нет.";
 
   return `${header}\n\n${body}`;
@@ -2142,44 +2166,44 @@ async function showAdminUserDetails(chatId, from, userId, messageId = null) {
 
   const questionsAndAnswersText = relatedQuestions.length
     ? relatedQuestions
-        .map((question, index) => {
-          const isReceived = String(question.receiverId) === String(userId);
-          const direction = isReceived ? "📥 Получил вопрос" : "📤 Отправил вопрос";
-          const secondUserLabel = isReceived ? "Отправитель" : "Получатель";
-          const secondUserId = isReceived ? question.senderId : question.receiverId;
-          const secondUserInfo = getUserShortInfo(secondUserId);
-          const questionText = truncateText(question.text || `[${question.contentType || "сообщение"}]`, 500);
-          const questionDate = formatDate(question.date);
-          const questionAnswers = getAnswersForQuestion(question);
+      .map((question, index) => {
+        const isReceived = String(question.receiverId) === String(userId);
+        const direction = isReceived ? "📥 Получил вопрос" : "📤 Отправил вопрос";
+        const secondUserLabel = isReceived ? "Отправитель" : "Получатель";
+        const secondUserId = isReceived ? question.senderId : question.receiverId;
+        const secondUserInfo = getUserShortInfo(secondUserId);
+        const questionText = truncateText(question.text || `[${question.contentType || "сообщение"}]`, 500);
+        const questionDate = formatDate(question.date);
+        const questionAnswers = getAnswersForQuestion(question);
 
-          const answersText = questionAnswers.length
-            ? questionAnswers
-                .map((answer, answerIndex) => {
-                  const answerText = truncateText(answer.answerText || answer.text || "—", 500);
-                  const answerDate = formatDate(answer.date);
-                  const answeredBy = answer.answeredBy || answer.fromId || "—";
-                  const sentTo = answer.sentTo || answer.toId || "—";
+        const answersText = questionAnswers.length
+          ? questionAnswers
+            .map((answer, answerIndex) => {
+              const answerText = truncateText(answer.answerText || answer.text || "—", 500);
+              const answerDate = formatDate(answer.date);
+              const answeredBy = answer.answeredBy || answer.fromId || "—";
+              const sentTo = answer.sentTo || answer.toId || "—";
 
-                  return (
-                    `   ${answerIndex + 1}) 💬 Ответ: ${answerText}\n` +
-                    `      👤 Ответил: ${getUserShortInfo(answeredBy)}\n` +
-                    `      👥 Кому: ${getUserShortInfo(sentTo)}\n` +
-                    `      🕒 Время: ${answerDate}`
-                  );
-                })
-                .join("\n")
-            : "   Ответов пока нет";
+              return (
+                `   ${answerIndex + 1}) 💬 Ответ: ${answerText}\n` +
+                `      👤 Ответил: ${getUserShortInfo(answeredBy)}\n` +
+                `      👥 Кому: ${getUserShortInfo(sentTo)}\n` +
+                `      🕒 Время: ${answerDate}`
+              );
+            })
+            .join("\n")
+          : "   Ответов пока нет";
 
-          return (
-            `${index + 1}. ${direction}\n` +
-            `   ❔ Вопрос: ${questionText}\n` +
-            `   👤 ${secondUserLabel}: ${secondUserInfo}\n` +
-            `   🕒 Время вопроса: ${questionDate}\n` +
-            `   📌 ID вопроса: ${question.id}\n` +
-            `   ─ Ответы:\n${answersText}`
-          );
-        })
-        .join("\n\n")
+        return (
+          `${index + 1}. ${direction}\n` +
+          `   ❔ Вопрос: ${questionText}\n` +
+          `   👤 ${secondUserLabel}: ${secondUserInfo}\n` +
+          `   🕒 Время вопроса: ${questionDate}\n` +
+          `   📌 ID вопроса: ${question.id}\n` +
+          `   ─ Ответы:\n${answersText}`
+        );
+      })
+      .join("\n\n")
     : "Пока нет вопросов и ответов.";
 
   const userOnlyAnswers = answers
@@ -2189,17 +2213,17 @@ async function showAdminUserDetails(chatId, from, userId, messageId = null) {
 
   const answersArchiveText = userOnlyAnswers.length
     ? userOnlyAnswers
-        .map((item, index) => {
-          return (
-            `${index + 1}. 💬 Ответ\n` +
-            `   ❔ Вопрос: ${truncateText(item.questionText || "—", 500)}\n` +
-            `   ✅ Ответ: ${truncateText(item.answerText || "—", 500)}\n` +
-            `   👤 Ответил: ${getUserShortInfo(item.answeredBy || "—")}\n` +
-            `   👥 Кому: ${getUserShortInfo(item.sentTo || "—")}\n` +
-            `   🕒 Время: ${formatDate(item.date)}`
-          );
-        })
-        .join("\n\n")
+      .map((item, index) => {
+        return (
+          `${index + 1}. 💬 Ответ\n` +
+          `   ❔ Вопрос: ${truncateText(item.questionText || "—", 500)}\n` +
+          `   ✅ Ответ: ${truncateText(item.answerText || "—", 500)}\n` +
+          `   👤 Ответил: ${getUserShortInfo(item.answeredBy || "—")}\n` +
+          `   👥 Кому: ${getUserShortInfo(item.sentTo || "—")}\n` +
+          `   🕒 Время: ${formatDate(item.date)}`
+        );
+      })
+      .join("\n\n")
     : "Пока нет сохранённых ответов.";
 
   const text =
@@ -2259,15 +2283,15 @@ async function showAdminStats(chatId, from) {
   await safeSendMessage(
     chatId,
     `📊 Общая статистика\n\n` +
-      `👥 Всего пользователей: ${Object.keys(users).length}\n` +
-      `🤖 Пользователей /annstart: ${Object.keys(annUsers).length}\n` +
-      `💌 Анонимных сообщений: ${totalAnonymous}\n` +
-      `✍️ Ответов: ${totalReplies}\n` +
-      `🔗 Переходов по ссылкам: ${totalClicks}\n\n` +
-      `💬 Всего диалогов: ${conversations.length}\n` +
-      `💌 Всего сообщений: ${totalDialogMessages}\n` +
-      `🎭 Всего реакций: ${totalReactions}\n` +
-      `🚫 Всего блокировок: ${totalBlocks}`
+    `👥 Всего пользователей: ${Object.keys(users).length}\n` +
+    `🤖 Пользователей /annstart: ${Object.keys(annUsers).length}\n` +
+    `💌 Анонимных сообщений: ${totalAnonymous}\n` +
+    `✍️ Ответов: ${totalReplies}\n` +
+    `🔗 Переходов по ссылкам: ${totalClicks}\n\n` +
+    `💬 Всего диалогов: ${conversations.length}\n` +
+    `💌 Всего сообщений: ${totalDialogMessages}\n` +
+    `🎭 Всего реакций: ${totalReactions}\n` +
+    `🚫 Всего блокировок: ${totalBlocks}`
   );
 }
 
@@ -2702,13 +2726,13 @@ async function startBot() {
     for (const user of Object.values(users)) {
       if (!user.startCode) user.startCode = "";
       if (!user.annCode) user.annCode = user.activeCode || "";
-      if (user.startCode) user.startLink = buildLink(user.startCode);
-      if (user.annCode) user.annLink = buildLink(user.annCode);
-      if (user.activeCode) user.link = buildLink(user.activeCode);
+      if (user.startCode) user.startLink = buildStartLink(user.startCode);
+      if (user.annCode) user.annLink = buildAnnLink(user.annCode);
+      if (user.annCode) user.link = buildAnnLink(user.annCode);
     }
 
     for (const user of Object.values(annUsers)) {
-      if (user.activeCode) user.link = buildLink(user.activeCode);
+      if (user.activeCode) user.link = buildAnnLink(user.activeCode);
     }
 
     recalculateStatsFromMessages();
