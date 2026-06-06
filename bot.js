@@ -30,14 +30,20 @@ const REACTIONS_FILE = path.join(DATA_DIR, "reactions.json");
 const TELEGRAM_TEXT_LIMIT = 3900;
 const REACTION_EMOJIS = ["❤️", "🔥", "😍", "🥰", "😘", "🌹", "👏", "😂", "😳", "👍"];
 
+const BOT_SHORT_DESCRIPTION =
+  "💌 Получай анонимные сообщения\n" +
+  "по личной ссылке";
+
 const BOT_DESCRIPTION =
-  "💞 Анонимные сообщения\n\n" +
-  "🔗 Создай свою личную ссылку и отправь её друзьям\n" +
-  "💌 Получай сообщения от знакомых\n" +
-  "🙈 Отправитель остаётся скрытым\n" +
-  "📊 Смотри статистику сообщений\n" +
-  "♻️ Обновляй ссылку в один клик\n\n" +
-  "✨ Поделись ссылкой в профиле, канале или сторис и узнай, что тебе хотят написать.";
+  `${BOT_SHORT_DESCRIPTION}\n\n` +
+  "✨ Узнай, кто отправил сообщение\n" +
+  "🆔 Просматривай ID и username\n" +
+  "отправителя\n" +
+  "💬 Отвечай без ограничений\n" +
+  "❤️ Ставь реакции на сообщения\n\n" +
+  "🔗 Создай свою личную ссылку\n" +
+  "и отправь её друзьям\n" +
+  "♻️ Обновляй ссылку в один клик";
 
 const START_GREETING =
   "👋 Добро пожаловать!\n\n" +
@@ -2719,7 +2725,7 @@ async function startBot() {
       console.error("setMyDescription error:", error.message);
     });
 
-    await bot.setMyShortDescription("💌 Получай анонимные сообщения по личной ссылке").catch((error) => {
+    await bot.setMyShortDescription(BOT_SHORT_DESCRIPTION).catch((error) => {
       console.error("setMyShortDescription error:", error.message);
     });
 
