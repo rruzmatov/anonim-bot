@@ -1,1 +1,684 @@
-[]
+[
+  {
+    "id": "conv_mq2nj7nu_ab55",
+    "aliases": [],
+    "user1": 1486279991,
+    "user2": 8014507256,
+    "source": "ann",
+    "senderId": 1486279991,
+    "senderUsername": "@ZJDESIGN",
+    "senderName": "ZJ🏀",
+    "createdAt": "2026-06-02T16:59:14.510Z",
+    "lastActivity": "2026-06-02T17:14:30.127Z",
+    "messages": [
+      {
+        "id": "msg_1780419548099_a4bbd4f1",
+        "conversationId": "conv_mq2nj7nu_ab55",
+        "fromId": 1486279991,
+        "toId": 8014507256,
+        "text": "Ладно привет от Жабы!🐸",
+        "contentType": "text",
+        "date": "2026-06-02T16:59:14.510Z",
+        "telegramMessageId": 317
+      },
+      {
+        "id": "reply_1780420469216_037a601c",
+        "conversationId": "conv_mq2nj7nu_ab55",
+        "fromId": 8014507256,
+        "toId": 1486279991,
+        "text": "прпр",
+        "contentType": "text",
+        "date": "2026-06-02T17:14:30.127Z",
+        "telegramMessageId": null
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2nj7nu_a33d",
+    "aliases": [],
+    "user1": 8368731065,
+    "user2": 8014507256,
+    "source": "ann",
+    "senderId": 8368731065,
+    "senderUsername": "@sh_azzz77",
+    "senderName": "🇺🇲",
+    "createdAt": "2026-06-02T16:59:20.041Z",
+    "lastActivity": "2026-06-02T17:14:22.127Z",
+    "messages": [
+      {
+        "id": "msg_1780419548095_8e32765f",
+        "conversationId": "conv_mq2nj7nu_a33d",
+        "fromId": 8368731065,
+        "toId": 8014507256,
+        "text": "Днх",
+        "contentType": "text",
+        "date": "2026-06-02T16:59:20.041Z",
+        "telegramMessageId": 322
+      },
+      {
+        "id": "reply_1780420461951_5ee01c7c",
+        "conversationId": "conv_mq2nj7nu_a33d",
+        "fromId": 8014507256,
+        "toId": 8368731065,
+        "text": "тре лох",
+        "contentType": "text",
+        "date": "2026-06-02T17:14:22.127Z",
+        "telegramMessageId": null
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2nj7nu_3d95",
+    "aliases": [],
+    "user1": 8209261178,
+    "user2": 8014507256,
+    "source": "ann",
+    "senderId": 8209261178,
+    "senderUsername": "@Sasaha666",
+    "senderName": "user_918",
+    "createdAt": "2026-06-02T16:59:22.001Z",
+    "lastActivity": "2026-06-02T17:14:15.627Z",
+    "messages": [
+      {
+        "id": "msg_1780419548100_a39a9c21",
+        "conversationId": "conv_mq2nj7nu_3d95",
+        "fromId": 8209261178,
+        "toId": 8014507256,
+        "text": "Привет как дела",
+        "contentType": "text",
+        "date": "2026-06-02T16:59:22.001Z",
+        "telegramMessageId": 325
+      },
+      {
+        "id": "reply_1780420453901_b5cfeee2",
+        "conversationId": "conv_mq2nj7nu_3d95",
+        "fromId": 8014507256,
+        "toId": 8209261178,
+        "text": "привет нормально",
+        "contentType": "text",
+        "date": "2026-06-02T17:14:15.627Z",
+        "telegramMessageId": null
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2nj7nu_0788",
+    "aliases": [],
+    "user1": 8209261178,
+    "user2": 8014507256,
+    "source": "ann",
+    "senderId": 8209261178,
+    "senderUsername": "@Sasaha666",
+    "senderName": "user_918",
+    "createdAt": "2026-06-02T16:59:22.093Z",
+    "lastActivity": "2026-06-02T17:14:05.715Z",
+    "messages": [
+      {
+        "id": "msg_1780419548101_27c18d5b",
+        "conversationId": "conv_mq2nj7nu_0788",
+        "fromId": 8209261178,
+        "toId": 8014507256,
+        "text": "Ты мне давно нравишься давай встречаться",
+        "contentType": "text",
+        "date": "2026-06-02T16:59:22.093Z",
+        "telegramMessageId": 327
+      },
+      {
+        "id": "reply_1780420445525_801f2b9b",
+        "conversationId": "conv_mq2nj7nu_0788",
+        "fromId": 8014507256,
+        "toId": 8209261178,
+        "text": "ахахах жесть",
+        "contentType": "text",
+        "date": "2026-06-02T17:14:05.715Z",
+        "telegramMessageId": null
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2nj7nu_da02",
+    "aliases": [],
+    "user1": 1486279991,
+    "user2": 8014507256,
+    "source": "ann",
+    "senderId": 1486279991,
+    "senderUsername": "@ZJDESIGN",
+    "senderName": "ZJ🏀",
+    "createdAt": "2026-06-02T16:59:22.270Z",
+    "lastActivity": "2026-06-02T17:13:59.149Z",
+    "messages": [
+      {
+        "id": "msg_1780419548097_b029b59e",
+        "conversationId": "conv_mq2nj7nu_da02",
+        "fromId": 1486279991,
+        "toId": 8014507256,
+        "text": "Бля так ссать хочется, вот бы нассать кому в РОТ БЛЯТЬ, ЧТОБЫ ЗАХЛЕБНУЛИСЬ И СДОХЛИ ТВАРИ🥰",
+        "contentType": "text",
+        "date": "2026-06-02T16:59:22.270Z",
+        "telegramMessageId": 331
+      },
+      {
+        "id": "reply_1780420438131_87e64d6b",
+        "conversationId": "conv_mq2nj7nu_da02",
+        "fromId": 8014507256,
+        "toId": 1486279991,
+        "text": "КТО БЫ ТЫ НЕ БЫЛ Я СОГЛАСНА В ТОБОЙ ВХАХХАХАХА",
+        "contentType": "text",
+        "date": "2026-06-02T17:13:59.149Z",
+        "telegramMessageId": null
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2nj7nu_caf7",
+    "aliases": [],
+    "user1": 8308193839,
+    "user2": 8014507256,
+    "source": "ann",
+    "senderId": 8308193839,
+    "senderUsername": "@M11082000",
+    "senderName": "M J",
+    "createdAt": "2026-06-02T12:58:48.080Z",
+    "lastActivity": "2026-06-02T13:34:21.839Z",
+    "messages": [
+      {
+        "id": "msg_1780405127893_80f150d7",
+        "conversationId": "conv_mq2nj7nu_caf7",
+        "fromId": 8308193839,
+        "toId": 8014507256,
+        "text": "Можно я поцелую тебя  губы, на которых ты сидишь)?🤣",
+        "contentType": "text",
+        "date": "2026-06-02T12:58:48.080Z",
+        "telegramMessageId": 283
+      },
+      {
+        "id": "reply_1780407261659_20bb2e58",
+        "conversationId": "conv_mq2nj7nu_caf7",
+        "fromId": 8014507256,
+        "toId": 8308193839,
+        "text": "ААА ЧЕГО БЛИН",
+        "contentType": "text",
+        "date": "2026-06-02T13:34:21.839Z",
+        "telegramMessageId": null
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2nj7nu_7a07",
+    "aliases": [],
+    "user1": 6006255869,
+    "user2": 6329509947,
+    "source": "ann",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "createdAt": "2026-06-02T11:54:28.287Z",
+    "lastActivity": "2026-06-02T11:54:28.287Z",
+    "messages": [
+      {
+        "id": "msg_1780401268078_895c7fa9",
+        "conversationId": "conv_mq2nj7nu_7a07",
+        "fromId": 6006255869,
+        "toId": 6329509947,
+        "text": "Это тема",
+        "contentType": "text",
+        "date": "2026-06-02T11:54:28.287Z",
+        "telegramMessageId": 243
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2nj7nu_6d1b",
+    "aliases": [],
+    "user1": 6989318335,
+    "user2": 8014507256,
+    "source": "start",
+    "senderId": 6989318335,
+    "senderUsername": "нет username",
+    "senderName": "Boisxon",
+    "createdAt": "2026-06-02T11:16:41.156Z",
+    "lastActivity": "2026-06-02T11:16:41.156Z",
+    "messages": [
+      {
+        "id": "msg_1780399000939_8f4c9649",
+        "conversationId": "conv_mq2nj7nu_6d1b",
+        "fromId": 6989318335,
+        "toId": 8014507256,
+        "text": "Что появилось первым курица или яйцо",
+        "contentType": "text",
+        "date": "2026-06-02T11:16:41.156Z",
+        "telegramMessageId": 182
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2nj7nu_4eb4",
+    "aliases": [],
+    "user1": 6006255869,
+    "user2": 6006255869,
+    "source": "ann",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "createdAt": "2026-06-02T10:58:53.610Z",
+    "lastActivity": "2026-06-02T10:58:53.610Z",
+    "messages": [
+      {
+        "id": "msg_1780397933437_8825c65e",
+        "conversationId": "conv_mq2nj7nu_4eb4",
+        "fromId": 6006255869,
+        "toId": 6006255869,
+        "text": "cdsf",
+        "contentType": "text",
+        "date": "2026-06-02T10:58:53.610Z",
+        "telegramMessageId": 171
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2nj7nu_ea6c",
+    "aliases": [],
+    "user1": 6006255869,
+    "user2": 6006255869,
+    "source": "start",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "createdAt": "2026-06-02T10:58:04.891Z",
+    "lastActivity": "2026-06-02T10:58:04.891Z",
+    "messages": [
+      {
+        "id": "msg_1780397884672_6a0a2e6a",
+        "conversationId": "conv_mq2nj7nu_ea6c",
+        "fromId": 6006255869,
+        "toId": 6006255869,
+        "text": "aaa",
+        "contentType": "text",
+        "date": "2026-06-02T10:58:04.891Z",
+        "telegramMessageId": 160
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2or0jl_3d3c",
+    "aliases": [],
+    "user1": 6006255869,
+    "user2": 5390034475,
+    "source": "start",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "createdAt": "2026-06-06T18:27:34.401Z",
+    "lastActivity": "2026-06-06T18:28:19.129Z",
+    "messages": [
+      {
+        "id": "msg_mq2or0jk_c4d5",
+        "conversationId": "conv_mq2or0jl_3d3c",
+        "fromId": 6006255869,
+        "toId": 5390034475,
+        "text": "Кууууу",
+        "contentType": "text",
+        "date": "2026-06-06T18:27:34.401Z",
+        "telegramMessageId": 1048
+      },
+      {
+        "id": "msg_mq2orl71_81d4",
+        "conversationId": "conv_mq2or0jl_3d3c",
+        "fromId": 5390034475,
+        "toId": 6006255869,
+        "text": "Куку",
+        "contentType": "text",
+        "date": "2026-06-06T18:28:01.165Z",
+        "telegramMessageId": 1052
+      },
+      {
+        "id": "msg_mq2orz21_16d3",
+        "conversationId": "conv_mq2or0jl_3d3c",
+        "fromId": 6006255869,
+        "toId": 5390034475,
+        "text": "Теперь смотри",
+        "contentType": "text",
+        "date": "2026-06-06T18:28:19.129Z",
+        "telegramMessageId": 1057
+      }
+    ]
+  },
+  {
+    "id": "conv_mq2oumq6_bd75",
+    "aliases": [],
+    "user1": 6006255869,
+    "user2": 5390034475,
+    "source": "ann",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "createdAt": "2026-06-06T18:30:23.118Z",
+    "lastActivity": "2026-06-06T18:30:23.118Z",
+    "messages": [
+      {
+        "id": "msg_mq2oumq5_a9b3",
+        "conversationId": "conv_mq2oumq6_bd75",
+        "fromId": 6006255869,
+        "toId": 5390034475,
+        "text": "Че там?",
+        "contentType": "text",
+        "date": "2026-06-06T18:30:23.118Z",
+        "telegramMessageId": 1065
+      }
+    ]
+  },
+  {
+    "id": "conv_mq59euz1_9e0e",
+    "aliases": [],
+    "user1": 8204746482,
+    "user2": 1977684284,
+    "source": "ann",
+    "senderId": 8204746482,
+    "senderUsername": "@fdgfdfvfd",
+    "senderName": "A",
+    "createdAt": "2026-06-08T13:41:31.597Z",
+    "lastActivity": "2026-06-08T13:41:31.597Z",
+    "messages": [
+      {
+        "id": "msg_mq59euz0_e907",
+        "conversationId": "conv_mq59euz1_9e0e",
+        "fromId": 8204746482,
+        "toId": 1977684284,
+        "text": "Рядом с ним ты кто?",
+        "contentType": "text",
+        "date": "2026-06-08T13:41:31.597Z",
+        "telegramMessageId": 1086
+      }
+    ]
+  },
+  {
+    "id": "conv_mq59evnd_969f",
+    "aliases": [],
+    "user1": 7526811234,
+    "user2": 1977684284,
+    "source": "ann",
+    "senderId": 7526811234,
+    "senderUsername": "@lalalali_lm",
+    "senderName": "D",
+    "createdAt": "2026-06-08T13:41:32.473Z",
+    "lastActivity": "2026-06-08T13:41:32.473Z",
+    "messages": [
+      {
+        "id": "msg_mq59evnd_deb5",
+        "conversationId": "conv_mq59evnd_969f",
+        "fromId": 7526811234,
+        "toId": 1977684284,
+        "text": "ты 😝?",
+        "contentType": "text",
+        "date": "2026-06-08T13:41:32.473Z",
+        "telegramMessageId": 1088
+      }
+    ]
+  },
+  {
+    "id": "conv_mq59gpn5_636a",
+    "aliases": [],
+    "user1": 6428065122,
+    "user2": 1977684284,
+    "source": "ann",
+    "senderId": 6428065122,
+    "senderUsername": "@Cyclopsqw",
+    "senderName": "SS",
+    "createdAt": "2026-06-08T13:42:58.001Z",
+    "lastActivity": "2026-06-08T13:42:58.001Z",
+    "messages": [
+      {
+        "id": "msg_mq59gpn5_58fa",
+        "conversationId": "conv_mq59gpn5_636a",
+        "fromId": 6428065122,
+        "toId": 1977684284,
+        "text": "В какой класс перешла??",
+        "contentType": "text",
+        "date": "2026-06-08T13:42:58.001Z",
+        "telegramMessageId": 1098
+      }
+    ]
+  },
+  {
+    "id": "conv_mq59jyei_83b3",
+    "aliases": [],
+    "user1": 8039940279,
+    "user2": 1977684284,
+    "source": "ann",
+    "senderId": 8039940279,
+    "senderUsername": "@sabirjanovvva",
+    "senderName": "сожи",
+    "createdAt": "2026-06-08T13:45:29.322Z",
+    "lastActivity": "2026-06-08T13:45:29.322Z",
+    "messages": [
+      {
+        "id": "msg_mq59jyei_df25",
+        "conversationId": "conv_mq59jyei_83b3",
+        "fromId": 8039940279,
+        "toId": 1977684284,
+        "text": "где ты",
+        "contentType": "text",
+        "date": "2026-06-08T13:45:29.322Z",
+        "telegramMessageId": 1105
+      }
+    ]
+  },
+  {
+    "id": "conv_mq59mccm_fe2d",
+    "aliases": [],
+    "user1": 6189241039,
+    "user2": 1977684284,
+    "source": "ann",
+    "senderId": 6189241039,
+    "senderUsername": "@barasheeeekk",
+    "senderName": "нигина🎀",
+    "createdAt": "2026-06-08T13:47:20.710Z",
+    "lastActivity": "2026-06-08T13:47:20.710Z",
+    "messages": [
+      {
+        "id": "msg_mq59mccm_575d",
+        "conversationId": "conv_mq59mccm_fe2d",
+        "fromId": 6189241039,
+        "toId": 1977684284,
+        "text": "За сколько обновила волосы?",
+        "contentType": "text",
+        "date": "2026-06-08T13:47:20.710Z",
+        "telegramMessageId": 1111
+      }
+    ]
+  },
+  {
+    "id": "conv_mq59otjx_447f",
+    "aliases": [],
+    "user1": 8216580218,
+    "user2": 1977684284,
+    "source": "ann",
+    "senderId": 8216580218,
+    "senderUsername": "@Swagnx",
+    "senderName": "Swag",
+    "createdAt": "2026-06-08T13:49:16.317Z",
+    "lastActivity": "2026-06-08T13:49:16.317Z",
+    "messages": [
+      {
+        "id": "msg_mq59otjx_7918",
+        "conversationId": "conv_mq59otjx_447f",
+        "fromId": 8216580218,
+        "toId": 1977684284,
+        "text": "Трансуха?",
+        "contentType": "text",
+        "date": "2026-06-08T13:49:16.317Z",
+        "telegramMessageId": 1116
+      }
+    ]
+  },
+  {
+    "id": "conv_mq5a5k3o_bf2f",
+    "aliases": [],
+    "user1": 5646803228,
+    "user2": 1977684284,
+    "source": "ann",
+    "senderId": 5646803228,
+    "senderUsername": "нет username",
+    "senderName": "Темур",
+    "createdAt": "2026-06-08T14:02:17.220Z",
+    "lastActivity": "2026-06-08T14:02:17.220Z",
+    "messages": [
+      {
+        "id": "msg_mq5a5k3o_5877",
+        "conversationId": "conv_mq5a5k3o_bf2f",
+        "fromId": 5646803228,
+        "toId": 1977684284,
+        "text": "Есть парень?",
+        "contentType": "text",
+        "date": "2026-06-08T14:02:17.220Z",
+        "telegramMessageId": 1130
+      }
+    ]
+  },
+  {
+    "id": "conv_mq5ha5ku_a0e4",
+    "aliases": [],
+    "user1": 6006255869,
+    "user2": 7410807881,
+    "source": "ann",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "createdAt": "2026-06-08T17:21:48.990Z",
+    "lastActivity": "2026-06-08T17:21:48.990Z",
+    "messages": [
+      {
+        "id": "msg_mq5ha5ku_581b",
+        "conversationId": "conv_mq5ha5ku_a0e4",
+        "fromId": 6006255869,
+        "toId": 7410807881,
+        "text": "Qq",
+        "contentType": "text",
+        "date": "2026-06-08T17:21:48.990Z",
+        "telegramMessageId": 1156
+      }
+    ]
+  },
+  {
+    "id": "conv_mq5hfk26_eed9",
+    "aliases": [],
+    "user1": 6006255869,
+    "user2": 7410807881,
+    "source": "ann",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "createdAt": "2026-06-08T17:26:01.038Z",
+    "lastActivity": "2026-06-08T17:26:01.038Z",
+    "messages": [
+      {
+        "id": "msg_mq5hfk26_d909",
+        "conversationId": "conv_mq5hfk26_eed9",
+        "fromId": 6006255869,
+        "toId": 7410807881,
+        "text": "Мана",
+        "contentType": "text",
+        "date": "2026-06-08T17:26:01.038Z",
+        "telegramMessageId": 1163
+      }
+    ]
+  },
+  {
+    "id": "conv_mq5hiheu_5967",
+    "aliases": [],
+    "user1": 5361603625,
+    "user2": 7410807881,
+    "source": "ann",
+    "senderId": 5361603625,
+    "senderUsername": "нет username",
+    "senderName": "naziiymah",
+    "createdAt": "2026-06-08T17:28:17.574Z",
+    "lastActivity": "2026-06-08T17:34:41.681Z",
+    "messages": [
+      {
+        "id": "msg_mq5hihet_95cf",
+        "conversationId": "conv_mq5hiheu_5967",
+        "fromId": 5361603625,
+        "toId": 7410807881,
+        "text": "брат как будто ждёте  что кто нибудь напишет",
+        "contentType": "text",
+        "date": "2026-06-08T17:28:17.574Z",
+        "telegramMessageId": 1168
+      },
+      {
+        "id": "msg_mq5hkcnt_0115",
+        "conversationId": "conv_mq5hiheu_5967",
+        "fromId": 7410807881,
+        "toId": 5361603625,
+        "text": "Привет а кто ты",
+        "contentType": "text",
+        "date": "2026-06-08T17:29:44.729Z",
+        "telegramMessageId": 1172
+      },
+      {
+        "id": "msg_mq5hob28_0289",
+        "conversationId": "conv_mq5hiheu_5967",
+        "fromId": 7410807881,
+        "toId": 5361603625,
+        "text": "Ты хорошо меня знаешь?",
+        "contentType": "text",
+        "date": "2026-06-08T17:32:49.280Z",
+        "telegramMessageId": 1177
+      },
+      {
+        "id": "msg_mq5hota8_d3de",
+        "conversationId": "conv_mq5hiheu_5967",
+        "fromId": 5361603625,
+        "toId": 7410807881,
+        "text": "как ты думаешь кимман",
+        "contentType": "text",
+        "date": "2026-06-08T17:33:12.896Z",
+        "telegramMessageId": 1180
+      },
+      {
+        "id": "msg_mq5hqpsh_27aa",
+        "conversationId": "conv_mq5hiheu_5967",
+        "fromId": 7410807881,
+        "toId": 5361603625,
+        "text": "Не знаю",
+        "contentType": "text",
+        "date": "2026-06-08T17:34:41.681Z",
+        "telegramMessageId": 1185
+      }
+    ]
+  },
+  {
+    "id": "conv_mq60x7ku_d75e",
+    "aliases": [],
+    "user1": 7347971149,
+    "user2": 7410807881,
+    "source": "ann",
+    "senderId": 7347971149,
+    "senderUsername": "@Lucius_Castuss",
+    "senderName": ".",
+    "createdAt": "2026-06-09T02:31:37.374Z",
+    "lastActivity": "2026-06-09T02:50:40.891Z",
+    "messages": [
+      {
+        "id": "msg_mq60x7ku_8935",
+        "conversationId": "conv_mq60x7ku_d75e",
+        "fromId": 7347971149,
+        "toId": 7410807881,
+        "text": "Я тебе люблю",
+        "contentType": "text",
+        "date": "2026-06-09T02:31:37.374Z",
+        "telegramMessageId": 1198
+      },
+      {
+        "id": "msg_mq61lpx7_1461",
+        "conversationId": "conv_mq60x7ku_d75e",
+        "fromId": 7410807881,
+        "toId": 7347971149,
+        "text": "Аха хорошо))",
+        "contentType": "text",
+        "date": "2026-06-09T02:50:40.891Z",
+        "telegramMessageId": 1202
+      }
+    ]
+  }
+]

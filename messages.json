@@ -13,8 +13,8 @@
     "date": "2026-06-02T10:58:04.891Z",
     "status": "sent",
     "telegramMessageId": 160,
-    "canReply": true,
-    "replies": []
+    "replies": [],
+    "conversationId": "conv_mq2nj7nu_ea6c"
   },
   {
     "id": "msg_1780397933437_8825c65e",
@@ -30,8 +30,8 @@
     "date": "2026-06-02T10:58:53.610Z",
     "status": "sent",
     "telegramMessageId": 171,
-    "canReply": true,
-    "replies": []
+    "replies": [],
+    "conversationId": "conv_mq2nj7nu_4eb4"
   },
   {
     "id": "msg_1780399000939_8f4c9649",
@@ -47,8 +47,8 @@
     "date": "2026-06-02T11:16:41.156Z",
     "status": "sent",
     "telegramMessageId": 182,
-    "canReply": true,
-    "replies": []
+    "replies": [],
+    "conversationId": "conv_mq2nj7nu_6d1b"
   },
   {
     "id": "msg_1780401268078_895c7fa9",
@@ -64,8 +64,8 @@
     "date": "2026-06-02T11:54:28.287Z",
     "status": "sent",
     "telegramMessageId": 243,
-    "canReply": true,
-    "replies": []
+    "replies": [],
+    "conversationId": "conv_mq2nj7nu_7a07"
   },
   {
     "id": "msg_1780405127893_80f150d7",
@@ -81,7 +81,6 @@
     "date": "2026-06-02T12:58:48.080Z",
     "status": "sent",
     "telegramMessageId": 283,
-    "canReply": false,
     "replies": [
       "reply_1780407261659_20bb2e58"
     ],
@@ -96,7 +95,8 @@
         "date": "2026-06-02T13:34:21.839Z",
         "status": "sent"
       }
-    ]
+    ],
+    "conversationId": "conv_mq2nj7nu_caf7"
   },
   {
     "id": "reply_1780407261659_20bb2e58",
@@ -108,7 +108,8 @@
     "toId": 8308193839,
     "text": "ААА ЧЕГО БЛИН",
     "date": "2026-06-02T13:34:21.839Z",
-    "status": "sent"
+    "status": "sent",
+    "conversationId": "conv_mq2nj7nu_caf7"
   },
   {
     "id": "msg_1780419548099_a4bbd4f1",
@@ -124,7 +125,6 @@
     "date": "2026-06-02T16:59:14.510Z",
     "status": "sent",
     "telegramMessageId": 317,
-    "canReply": false,
     "replies": [
       "reply_1780420469216_037a601c"
     ],
@@ -139,7 +139,8 @@
         "date": "2026-06-02T17:14:30.127Z",
         "status": "sent"
       }
-    ]
+    ],
+    "conversationId": "conv_mq2nj7nu_ab55"
   },
   {
     "id": "msg_1780419548095_8e32765f",
@@ -155,7 +156,6 @@
     "date": "2026-06-02T16:59:20.041Z",
     "status": "sent",
     "telegramMessageId": 322,
-    "canReply": false,
     "replies": [
       "reply_1780420461951_5ee01c7c"
     ],
@@ -170,7 +170,8 @@
         "date": "2026-06-02T17:14:22.127Z",
         "status": "sent"
       }
-    ]
+    ],
+    "conversationId": "conv_mq2nj7nu_a33d"
   },
   {
     "id": "msg_1780419548100_a39a9c21",
@@ -186,7 +187,6 @@
     "date": "2026-06-02T16:59:22.001Z",
     "status": "sent",
     "telegramMessageId": 325,
-    "canReply": false,
     "replies": [
       "reply_1780420453901_b5cfeee2"
     ],
@@ -201,7 +201,8 @@
         "date": "2026-06-02T17:14:15.627Z",
         "status": "sent"
       }
-    ]
+    ],
+    "conversationId": "conv_mq2nj7nu_3d95"
   },
   {
     "id": "msg_1780419548101_27c18d5b",
@@ -217,7 +218,6 @@
     "date": "2026-06-02T16:59:22.093Z",
     "status": "sent",
     "telegramMessageId": 327,
-    "canReply": false,
     "replies": [
       "reply_1780420445525_801f2b9b"
     ],
@@ -232,7 +232,8 @@
         "date": "2026-06-02T17:14:05.715Z",
         "status": "sent"
       }
-    ]
+    ],
+    "conversationId": "conv_mq2nj7nu_0788"
   },
   {
     "id": "msg_1780419548097_b029b59e",
@@ -248,7 +249,6 @@
     "date": "2026-06-02T16:59:22.270Z",
     "status": "sent",
     "telegramMessageId": 331,
-    "canReply": false,
     "replies": [
       "reply_1780420438131_87e64d6b"
     ],
@@ -263,7 +263,8 @@
         "date": "2026-06-02T17:13:59.149Z",
         "status": "sent"
       }
-    ]
+    ],
+    "conversationId": "conv_mq2nj7nu_da02"
   },
   {
     "id": "reply_1780420438131_87e64d6b",
@@ -275,7 +276,8 @@
     "toId": 1486279991,
     "text": "КТО БЫ ТЫ НЕ БЫЛ Я СОГЛАСНА В ТОБОЙ ВХАХХАХАХА",
     "date": "2026-06-02T17:13:59.149Z",
-    "status": "sent"
+    "status": "sent",
+    "conversationId": "conv_mq2nj7nu_da02"
   },
   {
     "id": "reply_1780420445525_801f2b9b",
@@ -287,7 +289,8 @@
     "toId": 8209261178,
     "text": "ахахах жесть",
     "date": "2026-06-02T17:14:05.715Z",
-    "status": "sent"
+    "status": "sent",
+    "conversationId": "conv_mq2nj7nu_0788"
   },
   {
     "id": "reply_1780420453901_b5cfeee2",
@@ -299,7 +302,8 @@
     "toId": 8209261178,
     "text": "привет нормально",
     "date": "2026-06-02T17:14:15.627Z",
-    "status": "sent"
+    "status": "sent",
+    "conversationId": "conv_mq2nj7nu_3d95"
   },
   {
     "id": "reply_1780420461951_5ee01c7c",
@@ -311,7 +315,8 @@
     "toId": 8368731065,
     "text": "тре лох",
     "date": "2026-06-02T17:14:22.127Z",
-    "status": "sent"
+    "status": "sent",
+    "conversationId": "conv_mq2nj7nu_a33d"
   },
   {
     "id": "reply_1780420469216_037a601c",
@@ -323,6 +328,438 @@
     "toId": 1486279991,
     "text": "прпр",
     "date": "2026-06-02T17:14:30.127Z",
-    "status": "sent"
+    "status": "sent",
+    "conversationId": "conv_mq2nj7nu_ab55"
+  },
+  {
+    "id": "msg_mq2or0jk_c4d5",
+    "type": "anonymous_message",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "receiverId": 5390034475,
+    "text": "Кууууу",
+    "contentType": "text",
+    "source": "start",
+    "senderInfoVisible": false,
+    "conversationId": "conv_mq2or0jl_3d3c",
+    "date": "2026-06-06T18:27:34.401Z",
+    "status": "sent",
+    "telegramMessageId": 1048,
+    "replies": [
+      "msg_mq2orl71_81d4"
+    ],
+    "answers": [
+      {
+        "id": "msg_mq2orl71_81d4",
+        "questionMessageId": "msg_mq2or0jk_c4d5",
+        "conversationId": "conv_mq2or0jl_3d3c",
+        "questionText": "Кууууу",
+        "answerText": "Куку",
+        "answeredBy": 5390034475,
+        "sentTo": 6006255869,
+        "date": "2026-06-06T18:28:01.165Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "msg_mq2orl71_81d4",
+    "type": "reply",
+    "conversationId": "conv_mq2or0jl_3d3c",
+    "replyToMessageId": "msg_mq2or0jk_c4d5",
+    "questionText": "Кууууу",
+    "answerText": "Куку",
+    "fromId": 5390034475,
+    "toId": 6006255869,
+    "text": "Куку",
+    "contentType": "text",
+    "date": "2026-06-06T18:28:01.165Z",
+    "status": "sent",
+    "telegramMessageId": 1052,
+    "replies": [
+      "msg_mq2orz21_16d3"
+    ],
+    "answers": [
+      {
+        "id": "msg_mq2orz21_16d3",
+        "questionMessageId": "msg_mq2orl71_81d4",
+        "conversationId": "conv_mq2or0jl_3d3c",
+        "questionText": "Куку",
+        "answerText": "Теперь смотри",
+        "answeredBy": 6006255869,
+        "sentTo": 5390034475,
+        "date": "2026-06-06T18:28:19.129Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "msg_mq2orz21_16d3",
+    "type": "reply",
+    "conversationId": "conv_mq2or0jl_3d3c",
+    "replyToMessageId": "msg_mq2orl71_81d4",
+    "questionText": "Куку",
+    "answerText": "Теперь смотри",
+    "fromId": 6006255869,
+    "toId": 5390034475,
+    "text": "Теперь смотри",
+    "contentType": "text",
+    "date": "2026-06-06T18:28:19.129Z",
+    "status": "sent",
+    "telegramMessageId": 1057
+  },
+  {
+    "id": "msg_mq2oumq5_a9b3",
+    "type": "anonymous_message",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "receiverId": 5390034475,
+    "text": "Че там?",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq2oumq6_bd75",
+    "date": "2026-06-06T18:30:23.118Z",
+    "status": "sent",
+    "telegramMessageId": 1065,
+    "replies": []
+  },
+  {
+    "id": "msg_mq59euz0_e907",
+    "type": "anonymous_message",
+    "senderId": 8204746482,
+    "senderUsername": "@fdgfdfvfd",
+    "senderName": "A",
+    "receiverId": 1977684284,
+    "text": "Рядом с ним ты кто?",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq59euz1_9e0e",
+    "date": "2026-06-08T13:41:31.597Z",
+    "status": "sent",
+    "telegramMessageId": 1086,
+    "replies": []
+  },
+  {
+    "id": "msg_mq59evnd_deb5",
+    "type": "anonymous_message",
+    "senderId": 7526811234,
+    "senderUsername": "@lalalali_lm",
+    "senderName": "D",
+    "receiverId": 1977684284,
+    "text": "ты 😝?",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq59evnd_969f",
+    "date": "2026-06-08T13:41:32.473Z",
+    "status": "sent",
+    "telegramMessageId": 1088,
+    "replies": []
+  },
+  {
+    "id": "msg_mq59gpn5_58fa",
+    "type": "anonymous_message",
+    "senderId": 6428065122,
+    "senderUsername": "@Cyclopsqw",
+    "senderName": "SS",
+    "receiverId": 1977684284,
+    "text": "В какой класс перешла??",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq59gpn5_636a",
+    "date": "2026-06-08T13:42:58.001Z",
+    "status": "sent",
+    "telegramMessageId": 1098,
+    "replies": []
+  },
+  {
+    "id": "msg_mq59jyei_df25",
+    "type": "anonymous_message",
+    "senderId": 8039940279,
+    "senderUsername": "@sabirjanovvva",
+    "senderName": "сожи",
+    "receiverId": 1977684284,
+    "text": "где ты",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq59jyei_83b3",
+    "date": "2026-06-08T13:45:29.322Z",
+    "status": "sent",
+    "telegramMessageId": 1105,
+    "replies": []
+  },
+  {
+    "id": "msg_mq59mccm_575d",
+    "type": "anonymous_message",
+    "senderId": 6189241039,
+    "senderUsername": "@barasheeeekk",
+    "senderName": "нигина🎀",
+    "receiverId": 1977684284,
+    "text": "За сколько обновила волосы?",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq59mccm_fe2d",
+    "date": "2026-06-08T13:47:20.710Z",
+    "status": "sent",
+    "telegramMessageId": 1111,
+    "replies": []
+  },
+  {
+    "id": "msg_mq59otjx_7918",
+    "type": "anonymous_message",
+    "senderId": 8216580218,
+    "senderUsername": "@Swagnx",
+    "senderName": "Swag",
+    "receiverId": 1977684284,
+    "text": "Трансуха?",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq59otjx_447f",
+    "date": "2026-06-08T13:49:16.317Z",
+    "status": "sent",
+    "telegramMessageId": 1116,
+    "replies": []
+  },
+  {
+    "id": "msg_mq5a5k3o_5877",
+    "type": "anonymous_message",
+    "senderId": 5646803228,
+    "senderUsername": "нет username",
+    "senderName": "Темур",
+    "receiverId": 1977684284,
+    "text": "Есть парень?",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq5a5k3o_bf2f",
+    "date": "2026-06-08T14:02:17.220Z",
+    "status": "sent",
+    "telegramMessageId": 1130,
+    "replies": []
+  },
+  {
+    "id": "msg_mq5ha5ku_581b",
+    "type": "anonymous_message",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "receiverId": 7410807881,
+    "text": "Qq",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq5ha5ku_a0e4",
+    "date": "2026-06-08T17:21:48.990Z",
+    "status": "sent",
+    "telegramMessageId": 1156,
+    "replies": []
+  },
+  {
+    "id": "msg_mq5hfk26_d909",
+    "type": "anonymous_message",
+    "senderId": 6006255869,
+    "senderUsername": "@rruzmatov",
+    "senderName": "Ahrorbek",
+    "receiverId": 7410807881,
+    "text": "Мана",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq5hfk26_eed9",
+    "date": "2026-06-08T17:26:01.038Z",
+    "status": "sent",
+    "telegramMessageId": 1163,
+    "replies": []
+  },
+  {
+    "id": "msg_mq5hihet_95cf",
+    "type": "anonymous_message",
+    "senderId": 5361603625,
+    "senderUsername": "нет username",
+    "senderName": "naziiymah",
+    "receiverId": 7410807881,
+    "text": "брат как будто ждёте  что кто нибудь напишет",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq5hiheu_5967",
+    "date": "2026-06-08T17:28:17.574Z",
+    "status": "sent",
+    "telegramMessageId": 1168,
+    "replies": [
+      "msg_mq5hkcnt_0115",
+      "msg_mq5hob28_0289"
+    ],
+    "answers": [
+      {
+        "id": "msg_mq5hkcnt_0115",
+        "questionMessageId": "msg_mq5hihet_95cf",
+        "conversationId": "conv_mq5hiheu_5967",
+        "questionText": "брат как будто ждёте  что кто нибудь напишет",
+        "answerText": "Привет а кто ты",
+        "answeredBy": 7410807881,
+        "sentTo": 5361603625,
+        "date": "2026-06-08T17:29:44.729Z",
+        "status": "sent"
+      },
+      {
+        "id": "msg_mq5hob28_0289",
+        "questionMessageId": "msg_mq5hihet_95cf",
+        "conversationId": "conv_mq5hiheu_5967",
+        "questionText": "брат как будто ждёте  что кто нибудь напишет",
+        "answerText": "Ты хорошо меня знаешь?",
+        "answeredBy": 7410807881,
+        "sentTo": 5361603625,
+        "date": "2026-06-08T17:32:49.280Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "msg_mq5hkcnt_0115",
+    "type": "reply",
+    "conversationId": "conv_mq5hiheu_5967",
+    "replyToMessageId": "msg_mq5hihet_95cf",
+    "questionText": "брат как будто ждёте  что кто нибудь напишет",
+    "answerText": "Привет а кто ты",
+    "fromId": 7410807881,
+    "toId": 5361603625,
+    "text": "Привет а кто ты",
+    "contentType": "text",
+    "date": "2026-06-08T17:29:44.729Z",
+    "status": "sent",
+    "telegramMessageId": 1172
+  },
+  {
+    "id": "msg_mq5hob28_0289",
+    "type": "reply",
+    "conversationId": "conv_mq5hiheu_5967",
+    "replyToMessageId": "msg_mq5hihet_95cf",
+    "questionText": "брат как будто ждёте  что кто нибудь напишет",
+    "answerText": "Ты хорошо меня знаешь?",
+    "fromId": 7410807881,
+    "toId": 5361603625,
+    "text": "Ты хорошо меня знаешь?",
+    "contentType": "text",
+    "date": "2026-06-08T17:32:49.280Z",
+    "status": "sent",
+    "telegramMessageId": 1177,
+    "replies": [
+      "msg_mq5hota8_d3de"
+    ],
+    "answers": [
+      {
+        "id": "msg_mq5hota8_d3de",
+        "questionMessageId": "msg_mq5hob28_0289",
+        "conversationId": "conv_mq5hiheu_5967",
+        "questionText": "Ты хорошо меня знаешь?",
+        "answerText": "как ты думаешь кимман",
+        "answeredBy": 5361603625,
+        "sentTo": 7410807881,
+        "date": "2026-06-08T17:33:12.896Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "msg_mq5hota8_d3de",
+    "type": "reply",
+    "conversationId": "conv_mq5hiheu_5967",
+    "replyToMessageId": "msg_mq5hob28_0289",
+    "questionText": "Ты хорошо меня знаешь?",
+    "answerText": "как ты думаешь кимман",
+    "fromId": 5361603625,
+    "toId": 7410807881,
+    "text": "как ты думаешь кимман",
+    "contentType": "text",
+    "date": "2026-06-08T17:33:12.896Z",
+    "status": "sent",
+    "telegramMessageId": 1180,
+    "replies": [
+      "msg_mq5hqpsh_27aa"
+    ],
+    "answers": [
+      {
+        "id": "msg_mq5hqpsh_27aa",
+        "questionMessageId": "msg_mq5hota8_d3de",
+        "conversationId": "conv_mq5hiheu_5967",
+        "questionText": "как ты думаешь кимман",
+        "answerText": "Не знаю",
+        "answeredBy": 7410807881,
+        "sentTo": 5361603625,
+        "date": "2026-06-08T17:34:41.681Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "msg_mq5hqpsh_27aa",
+    "type": "reply",
+    "conversationId": "conv_mq5hiheu_5967",
+    "replyToMessageId": "msg_mq5hota8_d3de",
+    "questionText": "как ты думаешь кимман",
+    "answerText": "Не знаю",
+    "fromId": 7410807881,
+    "toId": 5361603625,
+    "text": "Не знаю",
+    "contentType": "text",
+    "date": "2026-06-08T17:34:41.681Z",
+    "status": "sent",
+    "telegramMessageId": 1185
+  },
+  {
+    "id": "msg_mq60x7ku_8935",
+    "type": "anonymous_message",
+    "senderId": 7347971149,
+    "senderUsername": "@Lucius_Castuss",
+    "senderName": ".",
+    "receiverId": 7410807881,
+    "text": "Я тебе люблю",
+    "contentType": "text",
+    "source": "ann",
+    "senderInfoVisible": true,
+    "conversationId": "conv_mq60x7ku_d75e",
+    "date": "2026-06-09T02:31:37.374Z",
+    "status": "sent",
+    "telegramMessageId": 1198,
+    "replies": [
+      "msg_mq61lpx7_1461"
+    ],
+    "answers": [
+      {
+        "id": "msg_mq61lpx7_1461",
+        "questionMessageId": "msg_mq60x7ku_8935",
+        "conversationId": "conv_mq60x7ku_d75e",
+        "questionText": "Я тебе люблю",
+        "answerText": "Аха хорошо))",
+        "answeredBy": 7410807881,
+        "sentTo": 7347971149,
+        "date": "2026-06-09T02:50:40.891Z",
+        "status": "sent"
+      }
+    ]
+  },
+  {
+    "id": "msg_mq61lpx7_1461",
+    "type": "reply",
+    "conversationId": "conv_mq60x7ku_d75e",
+    "replyToMessageId": "msg_mq60x7ku_8935",
+    "questionText": "Я тебе люблю",
+    "answerText": "Аха хорошо))",
+    "fromId": 7410807881,
+    "toId": 7347971149,
+    "text": "Аха хорошо))",
+    "contentType": "text",
+    "date": "2026-06-09T02:50:40.891Z",
+    "status": "sent",
+    "telegramMessageId": 1202
   }
 ]

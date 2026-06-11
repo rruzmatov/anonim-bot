@@ -1,4 +1,19 @@
 {
+  "1977684284": {
+    "id": 1977684284,
+    "username": "lilalala_lii",
+    "first_name": "D",
+    "last_name": "",
+    "annStartedAt": "2026-06-08T13:39:23.601Z",
+    "lastAnnActive": "2026-06-08T13:40:06.392Z",
+    "activeCode": "9406bae841",
+    "oldCodes": [],
+    "link": "https://t.me/anonimnoe_smskibot?start=a_9406bae841",
+    "messagesReceived": 7,
+    "messagesSent": 0,
+    "repliesSent": 0,
+    "repliesReceived": 0
+  },
   "6006255869": {
     "id": 6006255869,
     "username": "rruzmatov",
@@ -10,11 +25,11 @@
     "oldCodes": [
       "e321abf4e4"
     ],
-    "link": "https://t.me/anonimnoe_smskibot?start=0639f8a469",
+    "link": "https://t.me/anonimnoe_smskibot?start=a_0639f8a469",
     "messagesReceived": 2,
-    "messagesSent": 3,
-    "repliesSent": 0,
-    "repliesReceived": 0
+    "messagesSent": 7,
+    "repliesSent": 1,
+    "repliesReceived": 1
   },
   "8014507256": {
     "id": 8014507256,
@@ -25,7 +40,7 @@
     "lastAnnActive": "2026-06-02T11:16:09.031Z",
     "activeCode": "b489bcb412",
     "oldCodes": [],
-    "link": "https://t.me/anonimnoe_smskibot?start=b489bcb412",
+    "link": "https://t.me/anonimnoe_smskibot?start=a_b489bcb412",
     "messagesReceived": 7,
     "messagesSent": 0,
     "repliesSent": 6,
@@ -40,10 +55,42 @@
     "lastAnnActive": "2026-06-02T11:53:52.230Z",
     "activeCode": "e4ec0b3018",
     "oldCodes": [],
-    "link": "https://t.me/anonimnoe_smskibot?start=e4ec0b3018",
+    "link": "https://t.me/anonimnoe_smskibot?start=a_e4ec0b3018",
     "messagesReceived": 1,
     "messagesSent": 0,
     "repliesSent": 0,
     "repliesReceived": 0
+  },
+  "5390034475": {
+    "id": 5390034475,
+    "username": "mw5775",
+    "first_name": ".",
+    "last_name": "",
+    "annStartedAt": "2026-06-06T18:30:02.505Z",
+    "lastAnnActive": "2026-06-06T18:30:08.732Z",
+    "activeCode": "df9908a3d4",
+    "oldCodes": [
+      "404ec53141"
+    ],
+    "link": "https://t.me/anonimnoe_smskibot?start=a_df9908a3d4",
+    "messagesReceived": 2,
+    "messagesSent": 0,
+    "repliesSent": 1,
+    "repliesReceived": 1
+  },
+  "7410807881": {
+    "id": 7410807881,
+    "username": "MY_000001",
+    "first_name": "",
+    "last_name": "",
+    "annStartedAt": "2026-06-08T16:56:13.976Z",
+    "lastAnnActive": "2026-06-08T17:09:52.791Z",
+    "activeCode": "817132ecb0",
+    "oldCodes": [],
+    "link": "https://t.me/anonimnoe_smskibot?start=a_817132ecb0",
+    "messagesReceived": 5,
+    "messagesSent": 0,
+    "repliesSent": 4,
+    "repliesReceived": 1
   }
 }

@@ -18,6 +18,22 @@ const LEGACY_DATA_DIR = __dirname;
 const DATA_DIR = path.resolve(process.env.BOT_DATA_DIR || path.join(__dirname, "data"));
 ensureDataDirectory(DATA_DIR);
 
+const MEDIA_DIR = path.join(__dirname, "media");
+const MEDIA_PHOTOS_DIR = path.join(MEDIA_DIR, "photos");
+const MEDIA_VIDEOS_DIR = path.join(MEDIA_DIR, "videos");
+const MEDIA_VOICES_DIR = path.join(MEDIA_DIR, "voices");
+const MEDIA_DOCUMENTS_DIR = path.join(MEDIA_DIR, "documents");
+const MEDIA_STICKERS_DIR = path.join(MEDIA_DIR, "stickers");
+const MEDIA_TEMP_DIR = path.join(MEDIA_DIR, "temp");
+[
+  MEDIA_PHOTOS_DIR,
+  MEDIA_VIDEOS_DIR,
+  MEDIA_VOICES_DIR,
+  MEDIA_DOCUMENTS_DIR,
+  MEDIA_STICKERS_DIR,
+  MEDIA_TEMP_DIR,
+].forEach(ensureDataDirectory);
+
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const ANN_USERS_FILE = path.join(DATA_DIR, "annUsers.json");
 const MESSAGES_FILE = path.join(DATA_DIR, "messages.json");
@@ -33,21 +49,22 @@ const VOICE_MESSAGES_FILE = path.join(DATA_DIR, "voiceMessages.json");
 const VIDEO_MESSAGES_FILE = path.join(DATA_DIR, "videoMessages.json");
 const VIDEO_NOTES_FILE = path.join(DATA_DIR, "videoNotes.json");
 const PHOTO_MESSAGES_FILE = path.join(DATA_DIR, "photoMessages.json");
+const GIF_MESSAGES_FILE = path.join(DATA_DIR, "gifMessages.json");
 const DOCUMENT_MESSAGES_FILE = path.join(DATA_DIR, "documentMessages.json");
 const PREMIUM_REACTIONS_FILE = path.join(DATA_DIR, "premiumReactions.json");
 const TELEGRAM_TEXT_LIMIT = 3900;
-const ADMIN_CONVERSATIONS_PAGE_SIZE = 5;
+const ADMIN_CONVERSATIONS_PAGE_SIZE = 10;
 const PREMIUM_REACTION_LIST = [
-  { key: "like", emoji: "👍", customEmojiId: "5429375545940919774" },
-  { key: "kiss", emoji: "😘", customEmojiId: "5366276300199723014" },
-  { key: "shock", emoji: "😳", customEmojiId: "5350746346997452265" },
-  { key: "heart", emoji: "❤️", customEmojiId: "5357579953497983889" },
-  { key: "fire", emoji: "🔥", customEmojiId: "5199564713653983220" },
-  { key: "rose", emoji: "🌹", customEmojiId: "5418164156584976210" },
-  { key: "laugh", emoji: "😂", customEmojiId: "5472363852131736400" },
-  { key: "clap", emoji: "👏", customEmojiId: "5258288547361732952" },
-  { key: "love", emoji: "🥰", customEmojiId: "5258383118246620195" },
-  { key: "eyes", emoji: "😍", customEmojiId: "5366575839808879229" },
+  { key: "like", emoji: "👍", emojiId: "5429375545940919774", name: "Лайк" },
+  { key: "kiss", emoji: "😘", emojiId: "5366276300199723014", name: "Поцелуй" },
+  { key: "wow", emoji: "😳", emojiId: "5350746346997452265", name: "Удивление", aliases: ["shock"] },
+  { key: "heart", emoji: "❤️", emojiId: "5357579953497983889", name: "Любовь" },
+  { key: "fire", emoji: "🔥", emojiId: "5199564713653983220", name: "Огонь" },
+  { key: "rose", emoji: "🌹", emojiId: "5418164156584976210", name: "Роза" },
+  { key: "laugh", emoji: "😂", emojiId: "5472363852131736400", name: "Смех" },
+  { key: "clap", emoji: "👏", emojiId: "5258288547361732952", name: "Аплодисменты" },
+  { key: "love", emoji: "🥰", emojiId: "5258383118246620195", name: "Нежность" },
+  { key: "eyes", emoji: "😍", emojiId: "5366575839808879229", name: "Влюблён" },
 ];
 const JSON_SCAN_EXCLUDED_DIRS = new Set([".git", "node_modules"]);
 const JSON_SCAN_EXCLUDED_FILES = new Set(["package.json", "package-lock.json"]);
@@ -101,12 +118,17 @@ let voiceMessages = [];
 let videoMessages = [];
 let videoNotes = [];
 let photoMessages = [];
+let gifMessages = [];
 let documentMessages = [];
 let premiumReactions = {};
 
 const pendingAnonymousMessages = new Map();
 const pendingReplies = new Map();
 const pendingSupportMessages = new Map();
+const pendingPushMessages = new Map();
+const pendingPollMessages = new Map();
+const processingBanCallbacks = new Set();
+const processedBanCallbacks = new Set();
 const startCooldown = new Map();
 
 function loadEnvFile() {
@@ -234,25 +256,130 @@ function readJson(filePath, defaultValue) {
   }
 }
 
+function readLegacyJson(filePath, defaultValue) {
+  const legacyPath = path.join(LEGACY_DATA_DIR, path.basename(filePath));
+  if (legacyPath === filePath || !fs.existsSync(legacyPath)) return defaultValue;
+
+  try {
+    const raw = fs.readFileSync(legacyPath, "utf8");
+    if (!raw.trim()) return defaultValue;
+    return JSON.parse(raw);
+  } catch (error) {
+    console.error(`Ошибка чтения ${legacyPath}:`, error.message);
+    return defaultValue;
+  }
+}
+
+function loadUsersData() {
+  const primaryUsers = readJson(USERS_FILE, {});
+  const legacyUsers = readLegacyJson(USERS_FILE, {});
+
+  if (
+    !primaryUsers ||
+    typeof primaryUsers !== "object" ||
+    Array.isArray(primaryUsers)
+  ) {
+    return legacyUsers && typeof legacyUsers === "object" && !Array.isArray(legacyUsers)
+      ? legacyUsers
+      : {};
+  }
+
+  if (!legacyUsers || typeof legacyUsers !== "object" || Array.isArray(legacyUsers)) {
+    return primaryUsers;
+  }
+
+  return {
+    ...legacyUsers,
+    ...primaryUsers,
+  };
+}
+
+function makeDataItemKey(item) {
+  if (!item || typeof item !== "object") return "";
+  return String(item.id || item.messageId || item.questionMessageId || item.conversationId || "");
+}
+
+function loadArrayData(filePath) {
+  const primaryItems = readJson(filePath, []);
+  const legacyItems = readLegacyJson(filePath, []);
+  const result = [];
+  const indexes = new Map();
+
+  function pushItems(items) {
+    if (!Array.isArray(items)) return;
+    for (const item of items) {
+      const key = makeDataItemKey(item);
+      if (key && indexes.has(key)) {
+        result[indexes.get(key)] = {
+          ...result[indexes.get(key)],
+          ...item,
+        };
+        continue;
+      }
+
+      if (key) indexes.set(key, result.length);
+      result.push(item);
+    }
+  }
+
+  pushItems(legacyItems);
+  pushItems(primaryItems);
+  return result;
+}
+
+function loadObjectData(filePath) {
+  const primaryData = readJson(filePath, {});
+  const legacyData = readLegacyJson(filePath, {});
+  const primaryObject = primaryData && typeof primaryData === "object" && !Array.isArray(primaryData) ? primaryData : {};
+  const legacyObject = legacyData && typeof legacyData === "object" && !Array.isArray(legacyData) ? legacyData : {};
+  return {
+    ...legacyObject,
+    ...primaryObject,
+  };
+}
+
+function loadReactionsData() {
+  const primaryData = readJson(REACTIONS_FILE, {});
+  const legacyData = readLegacyJson(REACTIONS_FILE, {});
+
+  if (Array.isArray(primaryData) || Array.isArray(legacyData)) {
+    return [
+      ...(Array.isArray(legacyData) ? legacyData : []),
+      ...(Array.isArray(primaryData) ? primaryData : []),
+    ];
+  }
+
+  const primaryObject = primaryData && typeof primaryData === "object" ? primaryData : {};
+  const legacyObject = legacyData && typeof legacyData === "object" ? legacyData : {};
+  return {
+    ...legacyObject,
+    ...primaryObject,
+  };
+}
+
 function loadData() {
-  users = readJson(USERS_FILE, {});
+  users = loadUsersData();
   annUsers = readJson(ANN_USERS_FILE, {});
-  messages = readJson(MESSAGES_FILE, []);
-  answers = readJson(ANSWERS_FILE, []);
+  messages = loadArrayData(MESSAGES_FILE);
+  answers = loadArrayData(ANSWERS_FILE);
   supportMessages = readJson(SUPPORT_FILE, []);
   stats = readJson(STATS_FILE, {});
-  loadConversations();
+  conversations = loadArrayData(CONVERSATIONS_FILE);
   blockedUsers = readJson(BLOCKED_USERS_FILE, {});
-  reactions = readJson(REACTIONS_FILE, {});
+  reactions = loadReactionsData();
   adminLogs = readJson(ADMIN_LOGS_FILE, []);
   polls = readJson(POLLS_FILE, []);
   voiceMessages = readJson(VOICE_MESSAGES_FILE, []);
   videoMessages = readJson(VIDEO_MESSAGES_FILE, []);
   videoNotes = readJson(VIDEO_NOTES_FILE, []);
   photoMessages = readJson(PHOTO_MESSAGES_FILE, []);
+  gifMessages = readJson(GIF_MESSAGES_FILE, []);
   documentMessages = readJson(DOCUMENT_MESSAGES_FILE, []);
-  premiumReactions = readJson(PREMIUM_REACTIONS_FILE, {});
+  premiumReactions = loadObjectData(PREMIUM_REACTIONS_FILE);
   normalizeRuntimeData();
+  console.log(`✅ Users loaded: ${Object.keys(users).length}`);
+  console.log(`✅ Premium reactions loaded: ${Object.keys(premiumReactions).length}`);
+  console.log(`✅ Reactions loaded: ${Array.isArray(reactions) ? reactions.length : Object.keys(reactions).length}`);
   logLoadedDataCounts();
 }
 
@@ -331,6 +458,10 @@ function savePhotoMessages() {
   return writeJson(PHOTO_MESSAGES_FILE, photoMessages);
 }
 
+function saveGifMessages() {
+  return writeJson(GIF_MESSAGES_FILE, gifMessages);
+}
+
 function saveDocumentMessages() {
   return writeJson(DOCUMENT_MESSAGES_FILE, documentMessages);
 }
@@ -356,6 +487,7 @@ function saveData(options = {}) {
     saveVideoMessages(),
     saveVideoNotes(),
     savePhotoMessages(),
+    saveGifMessages(),
     saveDocumentMessages(),
     savePremiumReactions(),
   ];
@@ -364,6 +496,17 @@ function saveData(options = {}) {
 }
 
 function logLoadedDataCounts() {
+  console.log("✅ users.json загружен");
+  console.log("✅ messages.json загружен");
+  console.log("✅ answers.json загружен");
+  console.log("✅ conversations.json загружен");
+  console.log("✅ reactions.json загружен");
+  console.log("✅ blockedUsers.json загружен");
+  console.log("✅ photoMessages.json загружен");
+  console.log("✅ videoMessages.json загружен");
+  console.log("✅ videoNotes.json загружен");
+  console.log("✅ voiceMessages.json загружен");
+  console.log("✅ gifMessages.json загружен");
   console.log(`📂 Loaded conversations: ${conversations.length}`);
   console.log(`💌 Loaded messages: ${messages.length}`);
   console.log(`✍️ Loaded answers: ${answers.length}`);
@@ -408,53 +551,92 @@ function normalizeRuntimeData() {
   if (!Array.isArray(supportMessages)) supportMessages = [];
   if (!Array.isArray(conversations)) conversations = [];
   if (!blockedUsers || typeof blockedUsers !== "object" || Array.isArray(blockedUsers)) blockedUsers = {};
-  if (!reactions || typeof reactions !== "object" || Array.isArray(reactions)) reactions = {};
+  if (!reactions || typeof reactions !== "object") reactions = {};
   if (!Array.isArray(adminLogs)) adminLogs = [];
   if (!Array.isArray(polls)) polls = [];
   if (!Array.isArray(voiceMessages)) voiceMessages = [];
   if (!Array.isArray(videoMessages)) videoMessages = [];
   if (!Array.isArray(videoNotes)) videoNotes = [];
   if (!Array.isArray(photoMessages)) photoMessages = [];
+  if (!Array.isArray(gifMessages)) gifMessages = [];
   if (!Array.isArray(documentMessages)) documentMessages = [];
   if (!premiumReactions || typeof premiumReactions !== "object" || Array.isArray(premiumReactions)) {
     premiumReactions = {};
   }
 
   normalizeBlockedUsers();
-  normalizeReactions();
   normalizePremiumReactions();
+  normalizeReactions();
   migrateConversationsFromMessages();
   normalizeConversationIdsForCallbackData();
+  normalizeConversationDisplayNumbers();
 }
 
 function normalizeBlockedUsers() {
   const normalized = {};
 
   for (const [userId, list] of Object.entries(blockedUsers)) {
+    if (userId === "__banned") {
+      normalized.__banned = list && typeof list === "object" && !Array.isArray(list) ? list : {};
+      continue;
+    }
+
     const cleanList = Array.isArray(list) ? list : [];
     normalized[String(userId)] = [...new Set(cleanList.map((item) => String(item)))];
   }
 
+  if (!normalized.__banned) normalized.__banned = {};
   blockedUsers = normalized;
 }
 
 function normalizeReactions() {
-  const normalized = {};
+  const normalized = [];
   const allowed = new Map();
   for (const item of PREMIUM_REACTION_LIST) {
     allowed.set(item.emoji, item);
     allowed.set(item.key, item);
-    allowed.set(item.customEmojiId, item);
+    allowed.set(item.emojiId, item);
+    if (Array.isArray(item.aliases)) {
+      for (const alias of item.aliases) allowed.set(alias, item);
+    }
   }
 
-  for (const [messageId, bucket] of Object.entries(reactions)) {
-    if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) continue;
+  function pushRecord(record) {
+    if (!record || typeof record !== "object") return;
+    const reaction = getPremiumReaction(record.reactionKey || record.key || record.emoji || record.emojiId);
+    if (!reaction) return;
 
-    normalized[messageId] = {};
-    for (const [reactionKey, count] of Object.entries(bucket)) {
-      const reaction = allowed.get(String(reactionKey));
-      if (!reaction) continue;
-      normalized[messageId][reaction.key] = Math.max(0, Number(count || 0));
+    normalized.push({
+      id: record.id || createId("reaction"),
+      reactionKey: reaction.key,
+      emoji: reaction.emoji,
+      emojiId: reaction.emojiId,
+      name: reaction.name,
+      senderId: record.senderId !== undefined && record.senderId !== null ? Number(record.senderId) : null,
+      receiverId: record.receiverId !== undefined && record.receiverId !== null ? Number(record.receiverId) : null,
+      messageId: String(record.messageId || ""),
+      conversationId: String(record.conversationId || ""),
+      date: record.date || nowIso(),
+    });
+  }
+
+  if (Array.isArray(reactions)) {
+    for (const record of reactions) pushRecord(record);
+  } else {
+    for (const [messageId, bucket] of Object.entries(reactions)) {
+      if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) continue;
+
+      for (const [reactionKey, count] of Object.entries(bucket)) {
+        const reaction = allowed.get(String(reactionKey));
+        if (!reaction) continue;
+        const total = Math.max(0, Number(count || 0));
+        for (let index = 0; index < total; index += 1) {
+          pushRecord({
+            reactionKey: reaction.key,
+            messageId,
+          });
+        }
+      }
     }
   }
 
@@ -467,7 +649,8 @@ function normalizePremiumReactions() {
   for (const item of PREMIUM_REACTION_LIST) {
     normalized[item.key] = {
       emoji: item.emoji,
-      customEmojiId: item.customEmojiId,
+      emojiId: item.emojiId,
+      name: item.name,
     };
   }
 
@@ -477,7 +660,8 @@ function normalizePremiumReactions() {
     if (!existing) continue;
     normalized[key] = {
       emoji: String(value.emoji || existing.emoji),
-      customEmojiId: String(value.customEmojiId || value.custom_emoji_id || existing.customEmojiId),
+      emojiId: String(value.emojiId || value.customEmojiId || value.custom_emoji_id || existing.emojiId),
+      name: String(value.name || existing.name),
     };
   }
 
@@ -493,6 +677,7 @@ function migrateConversationsFromMessages() {
     .map((conversation) => {
       const normalizedConversation = {
         id: String(conversation.id),
+        displayNumber: Number(conversation.displayNumber || 0),
         aliases: Array.isArray(conversation.aliases)
           ? conversation.aliases.map((item) => String(item)).filter(Boolean)
           : [],
@@ -516,7 +701,10 @@ function migrateConversationsFromMessages() {
           toId: Number(item.toId),
           text: String(item.text || ""),
           contentType: item.contentType || "text",
+          path: item.path || "",
           fileId: item.fileId || item.file_id || "",
+          fileUniqueId: item.fileUniqueId || item.file_unique_id || "",
+          caption: item.caption || "",
           duration: Number(item.duration || 0),
           date: item.date || normalizedConversation.createdAt,
           telegramMessageId: item.telegramMessageId ? Number(item.telegramMessageId) : null,
@@ -567,7 +755,10 @@ function migrateConversationsFromMessages() {
         toId: Number(item.receiverId),
         text: item.text || `[${item.contentType || "сообщение"}]`,
         contentType: item.contentType || "text",
+        path: item.path || "",
         fileId: item.fileId || item.file_id || "",
+        fileUniqueId: item.fileUniqueId || item.file_unique_id || "",
+        caption: item.caption || "",
         duration: Number(item.duration || 0),
         date: item.date || nowIso(),
         telegramMessageId: item.telegramMessageId || null,
@@ -606,7 +797,10 @@ function migrateConversationsFromMessages() {
       toId: Number(item.toId),
       text: item.text || item.answerText || `[${item.contentType || "сообщение"}]`,
       contentType: item.contentType || "text",
+      path: item.path || "",
       fileId: item.fileId || item.file_id || "",
+      fileUniqueId: item.fileUniqueId || item.file_unique_id || "",
+      caption: item.caption || "",
       duration: Number(item.duration || 0),
       date: item.date || nowIso(),
       telegramMessageId: item.telegramMessageId || null,
@@ -658,6 +852,22 @@ function normalizeConversationIdsForCallbackData() {
   }
 }
 
+function normalizeConversationDisplayNumbers() {
+  let maxDisplayNumber = conversations.reduce((max, conversation) => {
+    return Math.max(max, Number(conversation.displayNumber || 0));
+  }, 0);
+
+  const sorted = conversations
+    .slice()
+    .sort((a, b) => new Date(a.createdAt || a.lastActivity || 0) - new Date(b.createdAt || b.lastActivity || 0));
+
+  for (const conversation of sorted) {
+    if (Number(conversation.displayNumber || 0) > 0) continue;
+    maxDisplayNumber += 1;
+    conversation.displayNumber = maxDisplayNumber;
+  }
+}
+
 function formatDate(value) {
   try {
     return new Date(value).toLocaleString("ru-RU", {
@@ -670,6 +880,10 @@ function formatDate(value) {
   } catch {
     return value || "—";
   }
+}
+
+function formatCardDate(value) {
+  return formatDate(value).replace(",", " •");
 }
 
 function getDisplayName(from) {
@@ -727,44 +941,199 @@ function createStatsIfMissing(userId) {
   return stats[id];
 }
 
-function recalculateStatsFromMessages() {
-  for (const user of Object.values(users)) {
-    const userStats = createStatsIfMissing(user.id);
-    userStats.messagesReceived = 0;
-    userStats.messagesSent = 0;
-    userStats.repliesSent = 0;
-    userStats.repliesReceived = 0;
+function createEmptyUserStats(base = {}) {
+  return {
+    linkClicks: Number(base.linkClicks || 0),
+    messagesReceived: 0,
+    messagesSent: 0,
+    repliesSent: 0,
+    repliesReceived: 0,
+  };
+}
+
+function makeRecordKey(prefix, item) {
+  if (item && item.id) return `${prefix}:${item.id}`;
+
+  return [
+    prefix,
+    item.messageId || item.questionMessageId || item.replyToMessageId || "",
+    item.conversationId || "",
+    item.date || "",
+    item.senderId || item.fromId || item.answeredBy || "",
+    item.receiverId || item.toId || item.sentTo || "",
+    item.text || item.answerText || item.questionText || "",
+  ].join(":");
+}
+
+function normalizeQuestionRecord(item, source) {
+  const senderId = item.senderId ?? item.fromId ?? item.user1;
+  const receiverId = item.receiverId ?? item.toId ?? item.user2;
+  if (!senderId || !receiverId) return null;
+
+  return {
+    id: item.id || item.messageId || `${source}_${item.conversationId || ""}_${item.date || ""}`,
+    source,
+    conversationId: item.conversationId || "",
+    senderId: Number(senderId),
+    receiverId: Number(receiverId),
+    text: item.text || item.questionText || getContentTypeLabel(item.contentType || "text"),
+    contentType: item.contentType || "text",
+    date: item.date || item.createdAt || "",
+  };
+}
+
+function normalizeAnswerRecord(item, source) {
+  const senderId = item.senderId ?? item.fromId ?? item.answeredBy;
+  const receiverId = item.receiverId ?? item.toId ?? item.sentTo;
+  if (!senderId || !receiverId) return null;
+
+  return {
+    id: item.id || item.messageId || `${source}_${item.conversationId || ""}_${item.date || ""}`,
+    source,
+    conversationId: item.conversationId || "",
+    questionMessageId: item.questionMessageId || item.replyToMessageId || item.originalMessageId || "",
+    senderId: Number(senderId),
+    receiverId: Number(receiverId),
+    questionText: item.questionText || "",
+    answerText: item.answerText || item.text || getContentTypeLabel(item.contentType || "text"),
+    contentType: item.contentType || "text",
+    date: item.date || item.createdAt || "",
+  };
+}
+
+function collectQuestionRecords() {
+  const result = [];
+  const used = new Set();
+
+  function push(record) {
+    if (!record) return;
+    const key = makeRecordKey("question", record);
+    if (used.has(key)) return;
+    used.add(key);
+    result.push(record);
   }
 
+  for (const item of messages) {
+    if (item && item.type === "anonymous_message") {
+      push(normalizeQuestionRecord(item, "messages"));
+    }
+  }
+
+  for (const conversation of conversations) {
+    const firstMessage = Array.isArray(conversation.messages) ? conversation.messages[0] : null;
+    if (firstMessage) {
+      push(normalizeQuestionRecord({
+        ...firstMessage,
+        conversationId: firstMessage.conversationId || conversation.id,
+      }, "conversations"));
+    }
+  }
+
+  return result.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+}
+
+function collectAnswerRecords() {
+  const result = [];
+  const used = new Set();
+
+  function push(record) {
+    if (!record) return;
+    const key = makeRecordKey("answer", record);
+    if (used.has(key)) return;
+    used.add(key);
+    result.push(record);
+  }
+
+  for (const item of messages) {
+    if (item && item.type === "reply") {
+      push(normalizeAnswerRecord(item, "messages"));
+    }
+  }
+
+  for (const item of answers) {
+    push(normalizeAnswerRecord(item, "answers"));
+  }
+
+  for (const conversation of conversations) {
+    const conversationMessages = Array.isArray(conversation.messages) ? conversation.messages : [];
+    for (const item of conversationMessages.slice(1)) {
+      push(normalizeAnswerRecord({
+        ...item,
+        conversationId: item.conversationId || conversation.id,
+      }, "conversations"));
+    }
+  }
+
+  return result.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+}
+
+function buildStatsFromHistory() {
+  const rebuiltStats = {};
+
+  for (const user of Object.values(users)) {
+    rebuiltStats[String(user.id)] = createEmptyUserStats(stats[String(user.id)] || {});
+  }
+
+  for (const question of collectQuestionRecords()) {
+    const senderId = String(question.senderId);
+    const receiverId = String(question.receiverId);
+    if (!rebuiltStats[senderId]) rebuiltStats[senderId] = createEmptyUserStats(stats[senderId] || {});
+    if (!rebuiltStats[receiverId]) rebuiltStats[receiverId] = createEmptyUserStats(stats[receiverId] || {});
+    rebuiltStats[senderId].messagesSent += 1;
+    rebuiltStats[receiverId].messagesReceived += 1;
+  }
+
+  for (const answer of collectAnswerRecords()) {
+    const senderId = String(answer.senderId);
+    const receiverId = String(answer.receiverId);
+    if (!rebuiltStats[senderId]) rebuiltStats[senderId] = createEmptyUserStats(stats[senderId] || {});
+    if (!rebuiltStats[receiverId]) rebuiltStats[receiverId] = createEmptyUserStats(stats[receiverId] || {});
+    rebuiltStats[senderId].repliesSent += 1;
+    rebuiltStats[receiverId].repliesReceived += 1;
+  }
+
+  return rebuiltStats;
+}
+
+function syncStatsFromHistory(options = {}) {
+  const rebuiltStats = buildStatsFromHistory();
+  const changed = JSON.stringify(stats) !== JSON.stringify(rebuiltStats);
+  if (changed || options.force) {
+    stats = rebuiltStats;
+    saveStats();
+  }
+
+  return { changed, stats: rebuiltStats };
+}
+
+function getUserStatsFromHistory(userId) {
+  const id = String(userId);
+  const rebuilt = buildStatsFromHistory();
+  const current = stats[id] || {};
+  const next = rebuilt[id] || createEmptyUserStats(current);
+
+  if (JSON.stringify(current) !== JSON.stringify(next)) {
+    stats[id] = next;
+    saveStats();
+  }
+
+  return next;
+}
+
+function recalculateStatsFromMessages() {
+  const rebuiltStats = buildStatsFromHistory();
+  stats = rebuiltStats;
+
   for (const user of Object.values(annUsers)) {
+    const userStats = stats[String(user.id)] || createEmptyUserStats();
     user.messagesReceived = 0;
     user.messagesSent = 0;
     user.repliesSent = 0;
     user.repliesReceived = 0;
-  }
-
-  for (const item of messages) {
-    if (item.type === "anonymous_message") {
-      const senderId = String(item.senderId);
-      const receiverId = String(item.receiverId);
-
-      createStatsIfMissing(senderId).messagesSent += 1;
-      createStatsIfMissing(receiverId).messagesReceived += 1;
-
-      if (annUsers[senderId]) annUsers[senderId].messagesSent += 1;
-      if (annUsers[receiverId]) annUsers[receiverId].messagesReceived += 1;
-    }
-
-    if (item.type === "reply") {
-      const fromId = String(item.fromId);
-      const toId = String(item.toId);
-
-      createStatsIfMissing(fromId).repliesSent += 1;
-      createStatsIfMissing(toId).repliesReceived += 1;
-
-      if (annUsers[fromId]) annUsers[fromId].repliesSent += 1;
-      if (annUsers[toId]) annUsers[toId].repliesReceived += 1;
-    }
+    user.messagesReceived = userStats.messagesReceived;
+    user.messagesSent = userStats.messagesSent;
+    user.repliesSent = userStats.repliesSent;
+    user.repliesReceived = userStats.repliesReceived;
   }
 
   saveStats();
@@ -960,7 +1329,7 @@ function getContentType(msg) {
 }
 
 function isSupportedDialogMessage(msg) {
-  return ["text", "voice", "video", "video_note", "photo", "document"].includes(getContentType(msg));
+  return ["text", "voice", "video", "video_note", "photo", "document", "animation"].includes(getContentType(msg));
 }
 
 function getContentTypeLabel(contentType) {
@@ -968,9 +1337,10 @@ function getContentTypeLabel(contentType) {
     text: "💬 Сообщение",
     voice: "🎤 Голосовое сообщение",
     video: "🎥 Видео",
-    video_note: "🎥 Видео-кружок",
-    photo: "📷 Фото",
+    video_note: "📹 Видео-кружок",
+    photo: "🖼 Фото",
     document: "📄 Документ",
+    animation: "🎞 GIF",
   };
 
   return labels[contentType] || "💬 Сообщение";
@@ -981,7 +1351,18 @@ function getMessageFileId(msg) {
   if (msg.video) return msg.video.file_id;
   if (msg.video_note) return msg.video_note.file_id;
   if (msg.document) return msg.document.file_id;
+  if (msg.animation) return msg.animation.file_id;
   if (Array.isArray(msg.photo) && msg.photo.length) return msg.photo[msg.photo.length - 1].file_id;
+  return "";
+}
+
+function getMessageFileUniqueId(msg) {
+  if (msg.voice) return msg.voice.file_unique_id || "";
+  if (msg.video) return msg.video.file_unique_id || "";
+  if (msg.video_note) return msg.video_note.file_unique_id || "";
+  if (msg.document) return msg.document.file_unique_id || "";
+  if (msg.animation) return msg.animation.file_unique_id || "";
+  if (Array.isArray(msg.photo) && msg.photo.length) return msg.photo[msg.photo.length - 1].file_unique_id || "";
   return "";
 }
 
@@ -989,7 +1370,60 @@ function getMessageDuration(msg) {
   if (msg.voice) return Number(msg.voice.duration || 0);
   if (msg.video) return Number(msg.video.duration || 0);
   if (msg.video_note) return Number(msg.video_note.duration || 0);
+  if (msg.animation) return Number(msg.animation.duration || 0);
   return 0;
+}
+
+function getMediaDownloadDirectory(contentType) {
+  if (contentType === "photo") return MEDIA_PHOTOS_DIR;
+  if (contentType === "video" || contentType === "video_note") return MEDIA_VIDEOS_DIR;
+  if (contentType === "voice") return MEDIA_VOICES_DIR;
+  if (contentType === "document" || contentType === "animation") return MEDIA_DOCUMENTS_DIR;
+  if (contentType === "sticker") return MEDIA_STICKERS_DIR;
+  return MEDIA_TEMP_DIR;
+}
+
+function isLocallyStoredMediaType(contentType) {
+  return ["photo", "video", "video_note", "voice", "document", "animation", "sticker"].includes(contentType);
+}
+
+function toRelativeMediaPath(filePath) {
+  if (!filePath) return "";
+  const relativePath = path.relative(__dirname, filePath);
+  return relativePath.startsWith("..") ? filePath : relativePath;
+}
+
+function resolveStoredMediaPath(filePath) {
+  if (!filePath) return "";
+  return path.isAbsolute(filePath) ? filePath : path.join(__dirname, filePath);
+}
+
+function getSafeMediaFileName(messageId, downloadedPath) {
+  const extension = path.extname(downloadedPath || "") || "";
+  const baseName = String(messageId || createId("media")).replace(/[^a-zA-Z0-9_-]/g, "_");
+  return `${baseName}${extension}`;
+}
+
+async function downloadMessageMedia(contentType, fileId, messageId) {
+  if (!fileId || !isLocallyStoredMediaType(contentType)) return "";
+
+  const targetDir = getMediaDownloadDirectory(contentType);
+  ensureDataDirectory(targetDir);
+
+  try {
+    const downloadedPath = await bot.downloadFile(fileId, targetDir);
+    const finalPath = path.join(targetDir, getSafeMediaFileName(messageId, downloadedPath));
+
+    if (downloadedPath !== finalPath) {
+      if (fs.existsSync(finalPath)) fs.unlinkSync(finalPath);
+      fs.renameSync(downloadedPath, finalPath);
+    }
+
+    return toRelativeMediaPath(finalPath);
+  } catch (error) {
+    console.error("downloadFile error:", error.message);
+    return "";
+  }
 }
 
 function formatDuration(seconds) {
@@ -1102,6 +1536,7 @@ function createConversation(user1, user2, options = {}) {
   const source = normalizeConversationSource(options.source);
   const conversation = {
     id: createId("conv"),
+    displayNumber: getNextConversationDisplayNumber(),
     aliases: [],
     user1: Number(user1),
     user2: Number(user2),
@@ -1130,7 +1565,10 @@ function ensureConversationMessage(conversation, message) {
     toId: Number(message.toId),
     text: String(message.text || ""),
     contentType: message.contentType || "text",
+    path: message.path || "",
     fileId: message.fileId || message.file_id || "",
+    fileUniqueId: message.fileUniqueId || message.file_unique_id || "",
+    caption: message.caption || "",
     duration: Number(message.duration || 0),
     date: message.date || nowIso(),
     telegramMessageId:
@@ -1280,6 +1718,34 @@ function isCommunicationBlocked(user1, user2) {
   return hasBlocked(user1, user2) || hasBlocked(user2, user1);
 }
 
+function getBannedUsers() {
+  if (!blockedUsers.__banned || typeof blockedUsers.__banned !== "object" || Array.isArray(blockedUsers.__banned)) {
+    blockedUsers.__banned = {};
+  }
+
+  return blockedUsers.__banned;
+}
+
+function isGloballyBanned(userId) {
+  return Boolean(getBannedUsers()[String(userId)]);
+}
+
+function banUser(userId, adminId) {
+  const id = String(userId);
+  getBannedUsers()[id] = {
+    userId: Number(id),
+    adminId: Number(adminId),
+    date: nowIso(),
+  };
+  saveBlockedUsers({ userId: id });
+}
+
+function unbanUserGlobal(userId) {
+  const id = String(userId);
+  delete getBannedUsers()[id];
+  saveBlockedUsers({ userId: id });
+}
+
 function blockUser(userId, targetId) {
   const id = String(userId);
   const target = String(targetId);
@@ -1300,44 +1766,72 @@ function unblockUser(userId, targetId) {
 function getReactionCount(messageId, reactionKey) {
   const reaction = getPremiumReaction(reactionKey);
   const key = reaction ? reaction.key : String(reactionKey);
-  return Number((reactions[String(messageId)] || {})[key] || 0);
+  return reactions.filter((item) => {
+    return String(item.messageId) === String(messageId) && item.reactionKey === key;
+  }).length;
 }
 
-function addReaction(messageId, reactionKey) {
+function addReaction(message, reactionKey, senderId) {
   const reaction = getPremiumReaction(reactionKey);
   if (!reaction) return false;
 
-  const id = String(messageId);
-  if (!reactions[id]) reactions[id] = {};
-  reactions[id][reaction.key] = getReactionCount(id, reaction.key) + 1;
-  saveReactions({ messageId: id });
-  return true;
+  const record = {
+    id: createId("reaction"),
+    reactionKey: reaction.key,
+    emoji: reaction.emoji,
+    emojiId: reaction.emojiId,
+    name: reaction.name,
+    senderId: Number(senderId),
+    receiverId: Number(message.fromId),
+    messageId: String(message.id),
+    conversationId: String(message.conversationId || ""),
+    date: nowIso(),
+  };
+
+  reactions.push(record);
+  saveReactions({ messageId: record.messageId });
+  return record;
 }
 
 function getPremiumReaction(reactionKey) {
-  return PREMIUM_REACTION_LIST.find((item) => item.key === reactionKey || item.emoji === reactionKey) || null;
+  const key = String(reactionKey || "");
+  const fromList = PREMIUM_REACTION_LIST.find((item) => {
+    return (
+      item.key === key ||
+      item.emoji === key ||
+      item.emojiId === key ||
+      (Array.isArray(item.aliases) && item.aliases.includes(key))
+    );
+  });
+
+  if (!fromList) return null;
+
+  const stored = premiumReactions[fromList.key] || {};
+  return {
+    key: fromList.key,
+    emoji: stored.emoji || fromList.emoji,
+    emojiId: stored.emojiId || stored.customEmojiId || fromList.emojiId,
+    name: stored.name || fromList.name,
+  };
 }
 
 function premiumReactionHtml(reactionKey) {
   const reaction = getPremiumReaction(reactionKey);
   if (!reaction) return escapeHtml(reactionKey);
-  return `<tg-emoji emoji-id="${reaction.customEmojiId}">${escapeHtml(reaction.emoji)}</tg-emoji>`;
+  return `<tg-emoji emoji-id="${reaction.emojiId}">${escapeHtml(reaction.emoji)}</tg-emoji>`;
 }
 
 function getMessageReactionTotal(messageId) {
-  const bucket = reactions[String(messageId)] || {};
-  return Object.values(bucket).reduce((sum, count) => sum + Number(count || 0), 0);
+  return reactions.filter((item) => String(item.messageId) === String(messageId)).length;
 }
 
 function getTotalReactionCount() {
-  return Object.values(reactions).reduce((total, bucket) => {
-    if (!bucket || typeof bucket !== "object") return total;
-    return total + Object.values(bucket).reduce((sum, count) => sum + Number(count || 0), 0);
-  }, 0);
+  return reactions.length;
 }
 
 function getTotalBlockCount() {
   return Object.values(blockedUsers).reduce((sum, list) => {
+    if (list && typeof list === "object" && !Array.isArray(list)) return sum + Object.keys(list).length;
     return sum + (Array.isArray(list) ? list.length : 0);
   }, 0);
 }
@@ -1348,12 +1842,37 @@ function getConversationMessagesTotal() {
   }, 0);
 }
 
+function getNextConversationDisplayNumber() {
+  return conversations.reduce((max, conversation) => {
+    return Math.max(max, Number(conversation.displayNumber || 0));
+  }, 0) + 1;
+}
+
+function getConversationDisplayNumber(conversation) {
+  if (conversation && Number(conversation.displayNumber || 0) > 0) {
+    return Number(conversation.displayNumber);
+  }
+
+  const sorted = conversations
+    .slice()
+    .sort((a, b) => new Date(a.createdAt || a.lastActivity || 0) - new Date(b.createdAt || b.lastActivity || 0));
+  const index = sorted.findIndex((item) => String(item.id) === String(conversation && conversation.id));
+  return index >= 0 ? index + 1 : sorted.length + 1;
+}
+
+function getSortedConversationMessages(conversation) {
+  return (Array.isArray(conversation && conversation.messages) ? conversation.messages : [])
+    .slice()
+    .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+}
+
 function getMediaStore(contentType) {
   if (contentType === "voice") return voiceMessages;
   if (contentType === "video") return videoMessages;
   if (contentType === "video_note") return videoNotes;
   if (contentType === "photo") return photoMessages;
   if (contentType === "document") return documentMessages;
+  if (contentType === "animation") return gifMessages;
   return null;
 }
 
@@ -1363,6 +1882,7 @@ function saveMediaStore(contentType) {
   if (contentType === "video_note") return saveVideoNotes();
   if (contentType === "photo") return savePhotoMessages();
   if (contentType === "document") return saveDocumentMessages();
+  if (contentType === "animation") return saveGifMessages();
   return true;
 }
 
@@ -1374,13 +1894,20 @@ function saveMediaRecord(record) {
   const item = {
     id: record.id,
     messageId: record.messageId,
-    file_id: record.fileId,
+    type: record.contentType,
+    path: record.path || "",
+    fileId: record.fileId,
+    fileUniqueId: record.fileUniqueId || "",
+    caption: record.caption || "",
     senderId: Number(record.senderId),
     receiverId: Number(record.receiverId),
     conversationId: record.conversationId,
-    duration: Number(record.duration || 0),
     date: record.date,
   };
+
+  if (["voice", "video", "video_note"].includes(record.contentType)) {
+    item.duration = Number(record.duration || 0);
+  }
 
   if (existingIndex >= 0) {
     store[existingIndex] = item;
@@ -1397,35 +1924,44 @@ function removeMediaRecordsByMessageIds(messageIds) {
   videoMessages = videoMessages.filter((item) => !ids.has(String(item.messageId)));
   videoNotes = videoNotes.filter((item) => !ids.has(String(item.messageId)));
   photoMessages = photoMessages.filter((item) => !ids.has(String(item.messageId)));
+  gifMessages = gifMessages.filter((item) => !ids.has(String(item.messageId)));
   documentMessages = documentMessages.filter((item) => !ids.has(String(item.messageId)));
 }
 
 async function sendDialogPayload(chatId, payload, options = {}) {
   const caption = payload.caption || "";
   const sendOptions = { ...options };
+  const mediaSource = payload.path && fs.existsSync(resolveStoredMediaPath(payload.path))
+    ? resolveStoredMediaPath(payload.path)
+    : payload.fileId;
   let sent = null;
 
   try {
-    if (payload.contentType === "voice" && payload.fileId) {
-      sent = await bot.sendVoice(chatId, payload.fileId, {
+    if (payload.contentType === "voice" && mediaSource) {
+      sent = await bot.sendVoice(chatId, mediaSource, {
         ...sendOptions,
         caption,
       });
-    } else if (payload.contentType === "video" && payload.fileId) {
-      sent = await bot.sendVideo(chatId, payload.fileId, {
+    } else if (payload.contentType === "video" && mediaSource) {
+      sent = await bot.sendVideo(chatId, mediaSource, {
         ...sendOptions,
         caption,
       });
-    } else if (payload.contentType === "video_note" && payload.fileId) {
-      sent = await bot.sendVideoNote(chatId, payload.fileId, sendOptions);
+    } else if (payload.contentType === "video_note" && mediaSource) {
+      sent = await bot.sendVideoNote(chatId, mediaSource, sendOptions);
       if (caption) await safeSendMessage(chatId, caption);
-    } else if (payload.contentType === "photo" && payload.fileId) {
-      sent = await bot.sendPhoto(chatId, payload.fileId, {
+    } else if (payload.contentType === "photo" && mediaSource) {
+      sent = await bot.sendPhoto(chatId, mediaSource, {
         ...sendOptions,
         caption,
       });
-    } else if (payload.contentType === "document" && payload.fileId) {
-      sent = await bot.sendDocument(chatId, payload.fileId, {
+    } else if (payload.contentType === "document" && mediaSource) {
+      sent = await bot.sendDocument(chatId, mediaSource, {
+        ...sendOptions,
+        caption,
+      });
+    } else if (payload.contentType === "animation" && mediaSource) {
+      sent = await bot.sendAnimation(chatId, mediaSource, {
         ...sendOptions,
         caption,
       });
@@ -1441,8 +1977,12 @@ async function sendDialogPayload(chatId, payload, options = {}) {
 }
 
 async function sendStoredConversationMedia(chatId, message, options = {}) {
-  if (!message || !message.fileId) {
-    await safeSendMessage(chatId, "❌ Медиафайл не найден.");
+  const fileId = message ? message.fileId || message.file_id || "" : "";
+  const storedPath = message ? message.path || "" : "";
+  const localPath = storedPath ? resolveStoredMediaPath(storedPath) : "";
+
+  if (!message || (storedPath && !fs.existsSync(localPath)) || (!storedPath && !fileId)) {
+    await safeSendMessage(chatId, "❌ Файл не найден.");
     return null;
   }
 
@@ -1454,7 +1994,8 @@ async function sendStoredConversationMedia(chatId, message, options = {}) {
 
   return sendDialogPayload(chatId, {
     contentType: message.contentType,
-    fileId: message.fileId,
+    fileId,
+    path: storedPath,
     caption: captionLines.join("\n"),
   }, options);
 }
@@ -1526,9 +2067,7 @@ function deleteConversation(conversationId) {
   });
   removeMediaRecordsByMessageIds(messageIds);
 
-  for (const messageId of messageIds) {
-    delete reactions[messageId];
-  }
+  reactions = reactions.filter((item) => !messageIds.has(String(item.messageId)));
 
   saveData({ conversationId: conversation.id });
   return true;
@@ -1850,7 +2389,6 @@ function formatOwnerUserSearchResult(result) {
     ? `https://t.me/${result.username}`
     : `tg://user?id=${result.telegramId}`;
   const messageCount = result.messageCount ? String(result.messageCount) : "не удалось определить";
-  const sources = result.sources.length ? result.sources.join(", ") : "—";
 
   return (
     `🔎 <b>Пользователь найден</b>\n\n` +
@@ -1860,8 +2398,7 @@ function formatOwnerUserSearchResult(result) {
     `🔗 <b>Username:</b> ${escapeHtml(username)}\n` +
     `🕒 <b>Первое взаимодействие:</b> ${escapeHtml(result.firstInteraction ? formatDate(result.firstInteraction) : "—")}\n` +
     `💬 <b>Количество сообщений:</b> ${escapeHtml(messageCount)}\n\n` +
-    `🌐 <b>Ссылка:</b> <a href="${escapeHtml(profileLink)}">${escapeHtml(profileLink)}</a>\n\n` +
-    `📁 <b>Источники:</b> ${escapeHtml(sources)}`
+    `🌐 <b>Ссылка:</b>\n<a href="${escapeHtml(profileLink)}">${escapeHtml(profileLink)}</a>`
   );
 }
 
@@ -1916,6 +2453,7 @@ function adminKeyboard() {
       [{ text: "🤖 Пользователи /annstart", callback_data: "admin_ann_users" }],
       [{ text: "💌 Все сообщения", callback_data: "admin_messages" }],
       [{ text: "📂 Диалоги", callback_data: "admin_conversations" }],
+      [{ text: "🚫 Заблокированные пользователи", callback_data: "admin_blocked_users" }],
       [{ text: "📊 Общая статистика", callback_data: "admin_stats" }],
       [{ text: "📁 Экспорт JSON", callback_data: "admin_export" }],
     ],
@@ -1980,6 +2518,46 @@ async function safeEditMessageReplyMarkup(chatId, messageId, replyMarkup) {
   }
 }
 
+function getCallbackMessageKey(query) {
+  if (!query || !query.message) return "";
+  return `${query.message.chat.id}:${query.message.message_id}`;
+}
+
+async function clearCallbackInlineKeyboard(query) {
+  if (!query || !query.message) return false;
+  const chatId = query.message.chat.id;
+  const messageId = query.message.message_id;
+  const emptyKeyboard = { inline_keyboard: [] };
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await bot.editMessageReplyMarkup(emptyKeyboard, {
+        chat_id: chatId,
+        message_id: messageId,
+      });
+      return true;
+    } catch (error) {
+      const message = String(error && error.message ? error.message : "");
+      if (/message is not modified/i.test(message)) return true;
+      if (attempt === 2) {
+        console.error("editMessageReplyMarkup error:", message);
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+
+  return false;
+}
+
+function markBanCallbackProcessed(key) {
+  if (!key) return;
+  processedBanCallbacks.add(key);
+  setTimeout(() => {
+    processedBanCallbacks.delete(key);
+  }, 10 * 60 * 1000);
+}
+
 async function safeCopyMessage(chatId, fromChatId, messageId, options = {}) {
   try {
     return await bot.copyMessage(chatId, fromChatId, messageId, options);
@@ -1990,6 +2568,8 @@ async function safeCopyMessage(chatId, fromChatId, messageId, options = {}) {
 }
 
 async function showNormalStart(chatId, from) {
+  if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
+
   pendingAnonymousMessages.delete(String(from.id));
   pendingReplies.delete(String(from.id));
   pendingSupportMessages.delete(String(from.id));
@@ -2009,11 +2589,15 @@ async function showNormalStart(chatId, from) {
 }
 
 async function showHelp(chatId, from) {
+  if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
+
   createOrUpdateUser(from);
   await safeSendMessage(chatId, "ℹ️ Помощь\n\n/start — открыть главное меню\n/help — помощь");
 }
 
 async function showAnnStart(chatId, from) {
+  if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
+
   pendingAnonymousMessages.delete(String(from.id));
   pendingReplies.delete(String(from.id));
   pendingSupportMessages.delete(String(from.id));
@@ -2032,6 +2616,8 @@ async function showAnnStart(chatId, from) {
 }
 
 async function handleStartWithCode(chatId, from, code) {
+  if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
+
   createOrUpdateUser(from);
 
   const linkData = findLinkDataByCode(code);
@@ -2072,11 +2658,15 @@ async function handleStartWithCode(chatId, from, code) {
 }
 
 async function showLink(chatId, from) {
+  if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
+
   const annUser = createOrUpdateAnnUser(from);
   await safeSendMessage(chatId, `🔗 Ваша ссылка:\n${annUser.link}`);
 }
 
 async function showUserStats(chatId, from) {
+  if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
+
   createOrUpdateUser(from);
   recalculateStatsFromMessages();
   const userStats = createStatsIfMissing(from.id);
@@ -2121,6 +2711,7 @@ function getLastUserMessages(userId, limit = 10) {
 }
 
 async function showAnnBot(chatId, from) {
+  if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
   createOrUpdateUser(from);
   const annUser = annUsers[String(from.id)];
 
@@ -2154,6 +2745,7 @@ async function showAnnBot(chatId, from) {
 }
 
 async function changeLink(chatId, from) {
+  if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
   const user = createOrUpdateUser(from, { ensureCode: true });
   const oldCode = user.activeCode;
   const newCode = createUniqueCode();
@@ -2180,6 +2772,7 @@ async function changeLink(chatId, from) {
 }
 
 async function showMoreMessages(chatId, from) {
+  if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
   const annUser = createOrUpdateAnnUser(from);
   await safeSendMessage(
     chatId,
@@ -2188,6 +2781,7 @@ async function showMoreMessages(chatId, from) {
 }
 
 async function startSupport(chatId, from) {
+  if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
   createOrUpdateUser(from);
 
   pendingAnonymousMessages.delete(String(from.id));
@@ -2202,6 +2796,7 @@ async function startSupport(chatId, from) {
 
 async function handleSupportMessage(msg) {
   const userId = String(msg.from.id);
+  if (isGloballyBanned(userId) && !isOwner(userId)) return;
 
   if (!isTextMessage(msg)) {
     await sendUnsupportedMessageWarning(msg.chat.id);
@@ -2245,6 +2840,7 @@ async function handleSupportMessage(msg) {
 async function handleAnonymousMessage(msg, state) {
   const sender = msg.from;
   const senderId = String(sender.id);
+  if (isGloballyBanned(senderId) && !isOwner(senderId)) return;
   const senderUsername = sender.username ? `@${sender.username}` : "нет username";
   const senderName = getDisplayName(sender);
   const receiverId = String(state.receiverId);
@@ -2276,8 +2872,11 @@ async function handleAnonymousMessage(msg, state) {
   const contentType = getContentType(msg);
   const text = getStoredMessageText(msg);
   const fileId = getMessageFileId(msg);
+  const fileUniqueId = getMessageFileUniqueId(msg);
+  const caption = truncateText(getMessageText(msg), 2500);
   const duration = getMessageDuration(msg);
   const messageId = createId("msg");
+  const mediaPath = await downloadMessageMedia(contentType, fileId, messageId);
   const conversation = createConversation(senderId, receiverId, {
     source: state.source,
     senderId: Number(senderId),
@@ -2292,7 +2891,10 @@ async function handleAnonymousMessage(msg, state) {
     toId: Number(receiverId),
     text,
     contentType,
+    path: mediaPath,
     fileId,
+    fileUniqueId,
+    caption,
     duration,
     date,
   });
@@ -2315,6 +2917,7 @@ async function handleAnonymousMessage(msg, state) {
   } else {
     sentToReceiver = await sendDialogPayload(receiverId, {
       contentType,
+      path: mediaPath,
       fileId,
       caption: receiverText,
     }, {
@@ -2335,7 +2938,10 @@ async function handleAnonymousMessage(msg, state) {
     receiverId: Number(receiverId),
     text,
     contentType,
+    path: mediaPath,
     fileId,
+    fileUniqueId,
+    caption,
     duration,
     source: state.source,
     senderInfoVisible: isAnnConversation(conversation),
@@ -2351,7 +2957,10 @@ async function handleAnonymousMessage(msg, state) {
     id: createId(contentType),
     messageId,
     contentType,
+    path: mediaPath,
     fileId,
+    fileUniqueId,
+    caption,
     senderId,
     receiverId,
     conversationId: conversation.id,
@@ -2373,6 +2982,7 @@ async function handleAnonymousMessage(msg, state) {
 
 async function handleReplyMessage(msg, state) {
   const fromId = String(msg.from.id);
+  if (isGloballyBanned(fromId) && !isOwner(fromId)) return;
   const conversation = findConversation(state.conversationId);
 
   if (!conversation) {
@@ -2422,9 +3032,12 @@ async function handleReplyMessage(msg, state) {
   const contentType = getContentType(msg);
   const answerText = getStoredMessageText(msg);
   const fileId = getMessageFileId(msg);
+  const fileUniqueId = getMessageFileUniqueId(msg);
+  const caption = truncateText(getMessageText(msg), 2500);
   const duration = getMessageDuration(msg);
   const questionText = original.text || `[${original.contentType || "сообщение"}]`;
   const replyId = createId("msg");
+  const mediaPath = await downloadMessageMedia(contentType, fileId, replyId);
   const date = nowIso();
   const conversationMessage = ensureConversationMessage(conversation, {
     id: replyId,
@@ -2433,7 +3046,10 @@ async function handleReplyMessage(msg, state) {
     toId: Number(toId),
     text: answerText,
     contentType,
+    path: mediaPath,
     fileId,
+    fileUniqueId,
+    caption,
     duration,
     date,
   });
@@ -2456,6 +3072,7 @@ async function handleReplyMessage(msg, state) {
   } else {
     sentToReceiver = await sendDialogPayload(toId, {
       contentType,
+      path: mediaPath,
       fileId,
       caption: beautifulReplyText,
     }, {
@@ -2476,9 +3093,14 @@ async function handleReplyMessage(msg, state) {
     answerText,
     fromId: Number(fromId),
     toId: Number(toId),
+    senderId: Number(fromId),
+    receiverId: Number(toId),
     text: answerText,
     contentType,
+    path: mediaPath,
     fileId,
+    fileUniqueId,
+    caption,
     duration,
     date,
     status: sentToReceiver ? "sent" : "error",
@@ -2498,10 +3120,15 @@ async function handleReplyMessage(msg, state) {
     questionText,
     answerText,
     contentType,
+    path: mediaPath,
     fileId,
+    fileUniqueId,
+    caption,
     duration,
     answeredBy: Number(fromId),
     sentTo: Number(toId),
+    senderId: Number(fromId),
+    receiverId: Number(toId),
     date: reply.date,
     status: reply.status,
   };
@@ -2517,7 +3144,10 @@ async function handleReplyMessage(msg, state) {
     id: createId(contentType),
     messageId: replyId,
     contentType,
+    path: mediaPath,
     fileId,
+    fileUniqueId,
+    caption,
     senderId: fromId,
     receiverId: toId,
     conversationId: conversation.id,
@@ -2539,71 +3169,90 @@ async function handleReplyMessage(msg, state) {
 
 function formatConversationMessageLine(message, viewerId, index, isAdminView = false, conversation = null) {
   const contentType = message.contentType || "text";
-  const contentLabel = getContentTypeLabel(contentType);
-  const text = truncateText(message.text || contentLabel, isAdminView ? 1200 : 700);
-  const date = formatDate(message.date);
+  const contentLabel = escapeHtml(getContentTypeLabel(contentType));
+  const text = escapeHtml(truncateText(message.text || getContentTypeLabel(contentType), isAdminView ? 1200 : 700));
+  const date = escapeHtml(formatDate(message.date));
+  const messageReactions = reactions
+    .filter((item) => String(item.messageId) === String(message.id))
+    .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+  const reactionBlock = messageReactions.length
+    ? "\n" + messageReactions
+      .map((item) => {
+        return `   ${premiumReactionHtml(item.reactionKey)} Реакция: ${escapeHtml(item.name || item.reactionKey)} • ${escapeHtml(formatDate(item.date))}`;
+      })
+      .join("\n")
+    : "";
   const duration = message.duration ? `\n   ⏱ Длительность: ${formatDuration(message.duration)}` : "";
   const mediaAction = contentType === "voice"
-    ? "\n   ▶️ Прослушать: нажмите кнопку под историей"
+    ? "\n   🎤 Прослушать голосовое"
     : contentType === "video_note"
-      ? "\n   ▶️ Открыть: нажмите кнопку под историей"
+      ? "\n   📹 Открыть кружок"
       : contentType === "video"
-        ? "\n   ▶️ Открыть видео: нажмите кнопку под историей"
+        ? "\n   🎥 Открыть видео"
         : contentType === "photo"
-          ? "\n   👁 Открыть фото: нажмите кнопку под историей"
+          ? "\n   🖼 Открыть фото"
           : contentType === "document"
-            ? "\n   📄 Открыть документ: нажмите кнопку под историей"
-            : "";
+            ? "\n   📄 Открыть документ"
+            : contentType === "animation"
+              ? "\n   🎞 Открыть GIF"
+              : "";
 
   if (isAdminView) {
     return (
       `${index}. ${date}\n` +
-      `   👤 От: ${getUserShortInfo(message.fromId)}\n` +
-      `   👥 Кому: ${getUserShortInfo(message.toId)}\n` +
-      `   ${contentLabel}: ${text}${duration}${mediaAction}`
+      `   👤 От: ${escapeHtml(getUserShortInfo(message.fromId))}\n` +
+      `   👥 Кому: ${escapeHtml(getUserShortInfo(message.toId))}\n` +
+      `   ${contentLabel}: ${text}${duration}${mediaAction}${reactionBlock}`
     );
   }
 
   const author = String(message.fromId) === String(viewerId) ? "Вы" : "Собеседник";
   const userDuration = message.duration ? `\n⏱ Длительность: ${formatDuration(message.duration)}` : "";
-  return `${index}. ${author} • ${date}\n${contentLabel}: ${text}${userDuration}`;
+  const userReactions = reactionBlock ? reactionBlock.replace(/^   /gm, "") : "";
+  return `${index}. ${escapeHtml(author)} • ${date}\n${contentLabel}: ${text}${userDuration}${userReactions}`;
 }
 
 function formatCompactQuestionAnswerDialog(conversation, viewerId, isAdminView = false) {
-  const allMessages = Array.isArray(conversation.messages) ? conversation.messages : [];
+  const allMessages = getSortedConversationMessages(conversation);
   if (allMessages.length !== 2) return "";
 
   const [question, answer] = allMessages;
-  const questionText = truncateText(question.text || getContentTypeLabel(question.contentType), 1800);
-  const answerText = truncateText(answer.text || getContentTypeLabel(answer.contentType), 1800);
-  const title = isAdminView ? `📂 Диалог ${conversation.id}` : "📂 Диалог";
+  const questionText = escapeHtml(truncateText(question.text || getContentTypeLabel(question.contentType), 1800));
+  const answerText = escapeHtml(truncateText(answer.text || getContentTypeLabel(answer.contentType), 1800));
+  const title = `📂 Диалог #${getConversationDisplayNumber(conversation)}`;
 
   return (
     `${title}\n\n` +
     `❓ Вопрос\n\n` +
     `${questionText}\n\n` +
-    `🕒 ${formatDate(question.date)}\n\n` +
+    `🕒 ${escapeHtml(formatDate(question.date))}\n\n` +
     `━━━━━━━━━━━━━━\n\n` +
     `✅ Ответ\n\n` +
     `${answerText}\n\n` +
-    `🕒 ${formatDate(answer.date)}`
+    `🕒 ${escapeHtml(formatDate(answer.date))}`
   );
 }
 
 function buildConversationMediaKeyboard(conversation, backCallback = "") {
   const rows = [];
   const mediaMessages = Array.isArray(conversation.messages)
-    ? conversation.messages.filter((message) => message.fileId && message.contentType !== "text")
+    ? getSortedConversationMessages(conversation).filter((message) => (message.path || message.fileId || message.file_id) && message.contentType !== "text")
     : [];
 
   for (const message of mediaMessages.slice(-20)) {
     const label = message.contentType === "voice"
-      ? "▶️ Голосовое"
+      ? "🎤 Прослушать голосовое"
       : message.contentType === "photo"
-        ? "👁 Фото"
+        ? "🖼 Открыть фото"
         : message.contentType === "document"
-          ? "📄 Документ"
-          : "▶️ Медиа";
+          ? "📄 Открыть документ"
+          : message.contentType === "animation"
+            ? "🎞 Открыть GIF"
+            : message.contentType === "video_note"
+              ? "📹 Открыть кружок"
+              : message.contentType === "video"
+                ? "🎥 Открыть видео"
+                : "▶️ Открыть";
     rows.push([{ text: `${label} ${formatDate(message.date)}`, callback_data: `media:${conversation.id}:${message.id}` }]);
   }
 
@@ -2614,18 +3263,52 @@ function buildConversationMediaKeyboard(conversation, backCallback = "") {
 function formatConversationHistory(conversation, viewerId, options = {}) {
   const isAdminView = Boolean(options.admin);
   const limit = options.limit || 50;
-  const allMessages = Array.isArray(conversation.messages) ? conversation.messages : [];
+  const allMessages = getSortedConversationMessages(conversation);
   const selectedMessages = isAdminView ? allMessages : allMessages.slice(-limit);
   const compactDialog = formatCompactQuestionAnswerDialog(conversation, viewerId, isAdminView);
-  if (compactDialog) return compactDialog;
+  if (compactDialog && !isAdminView) return compactDialog;
+
+  if (isAdminView) {
+    const question = allMessages[0] || null;
+    const answer = allMessages.slice(1).find(Boolean) || null;
+    const senderId = question ? question.fromId : conversation.user1;
+    const receiverId = question ? question.toId : conversation.user2;
+    const extraMessages = allMessages.slice(2);
+
+    const header =
+      `📂 Диалог #${getConversationDisplayNumber(conversation)}\n\n` +
+      `━━━━━━━━━━━━\n\n` +
+      `❓ Вопрос\n\n` +
+      `${escapeHtml(question ? question.text || getContentTypeLabel(question.contentType) : "—")}\n\n` +
+      `🕒 ${escapeHtml(formatCardDate(question ? question.date : conversation.createdAt))}\n\n` +
+      `━━━━━━━━━━━━\n\n` +
+      `✅ Ответ\n\n` +
+      `${escapeHtml(answer ? answer.text || getContentTypeLabel(answer.contentType) : "Ответов пока нет.")}\n\n` +
+      `🕒 ${answer ? escapeHtml(formatCardDate(answer.date)) : "—"}\n\n` +
+      `━━━━━━━━━━━━\n\n` +
+      `👤 Отправитель\n\n` +
+      `${escapeHtml(getUserShortInfo(senderId))}\n\n` +
+      `🆔 ${escapeHtml(senderId)}\n\n` +
+      `👥 Получатель\n\n` +
+      `${escapeHtml(getUserShortInfo(receiverId))}\n\n` +
+      `🆔 ${escapeHtml(receiverId)}`;
+
+    if (!extraMessages.length) return `${header}\n\n━━━━━━━━━━━━`;
+
+    const extraText = extraMessages
+      .map((message, index) => formatConversationMessageLine(message, viewerId, index + 3, true, conversation))
+      .join("\n\n");
+
+    return `${header}\n\n━━━━━━━━━━━━\n\n${extraText}`;
+  }
 
   const header = isAdminView
-    ? `📂 Диалог ${conversation.id}\n\n` +
-    `👤 Участник 1: ${getUserShortInfo(conversation.user1)}\n` +
-    `👤 Участник 2: ${getUserShortInfo(conversation.user2)}\n` +
+    ? `📂 Диалог #${getConversationDisplayNumber(conversation)}\n\n` +
+    `👤 Участник 1: ${escapeHtml(getUserShortInfo(conversation.user1))}\n` +
+    `👤 Участник 2: ${escapeHtml(getUserShortInfo(conversation.user2))}\n` +
     `💌 Сообщений: ${allMessages.length}\n` +
-    `🕒 Создан: ${formatDate(conversation.createdAt)}\n` +
-    `🕒 Активность: ${formatDate(conversation.lastActivity)}`
+    `🕒 Создан: ${escapeHtml(formatDate(conversation.createdAt))}\n` +
+    `🕒 Активность: ${escapeHtml(formatDate(conversation.lastActivity))}`
     : `📜 История диалога\n\n💌 Последние ${Math.min(limit, allMessages.length)} сообщений`;
 
   const body = selectedMessages.length
@@ -2656,7 +3339,7 @@ async function showConversationHistory(chatId, from, conversationId) {
   await safeSendLongMessage(
     chatId,
     formatConversationHistory(conversation, from.id, { limit: 50 }),
-    mediaKeyboard ? { reply_markup: mediaKeyboard } : {}
+    mediaKeyboard ? { parse_mode: "HTML", reply_markup: mediaKeyboard } : { parse_mode: "HTML" }
   );
 }
 
@@ -2677,14 +3360,14 @@ async function showConversationHistoryFromCallback(chatId, from, conversationId,
   await safeSendLongMessage(
     chatId,
     formatConversationHistory(conversation, from.id, { limit: 50 }),
-    mediaKeyboard ? { reply_markup: mediaKeyboard } : {}
+    mediaKeyboard ? { parse_mode: "HTML", reply_markup: mediaKeyboard } : { parse_mode: "HTML" }
   );
 }
 
 function getSortedConversations() {
   return conversations
     .slice()
-    .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0));
+    .sort((a, b) => new Date(b.lastActivity || b.createdAt || 0) - new Date(a.lastActivity || a.createdAt || 0));
 }
 
 function buildAdminConversationsKeyboard(page = 0) {
@@ -2700,7 +3383,7 @@ function buildAdminConversationsKeyboard(page = 0) {
       const lastActivity = formatDate(conversation.lastActivity || conversation.createdAt);
       return [
         {
-          text: `${offset + index + 1}. ${conversation.user1} ↔ ${conversation.user2} • ${count} • ${lastActivity}`,
+          text: `#${getConversationDisplayNumber(conversation)}. ${conversation.user1} ↔ ${conversation.user2} • ${count} • ${lastActivity}`,
           callback_data: `admin_conv:${conversation.id}`,
         },
       ];
@@ -2714,19 +3397,38 @@ function buildAdminConversationsKeyboard(page = 0) {
   return { inline_keyboard: keyboard };
 }
 
+function buildAdminConversationDetailsKeyboard(conversation) {
+  const rows = [];
+  const mediaKeyboard = buildConversationMediaKeyboard(conversation);
+  if (mediaKeyboard && Array.isArray(mediaKeyboard.inline_keyboard)) {
+    rows.push(...mediaKeyboard.inline_keyboard);
+  }
+
+  const sorted = getSortedConversations();
+  const index = sorted.findIndex((item) => String(item.id) === String(conversation.id));
+  const nav = [];
+
+  if (index > 0) {
+    nav.push({ text: "◀️ Предыдущий", callback_data: `admin_conv:${sorted[index - 1].id}` });
+  }
+
+  nav.push({ text: "📜 Список", callback_data: "admin_conversations" });
+
+  if (index >= 0 && index < sorted.length - 1) {
+    nav.push({ text: "▶️ Следующий", callback_data: `admin_conv:${sorted[index + 1].id}` });
+  }
+
+  rows.push(nav);
+  return { inline_keyboard: rows };
+}
+
 async function showAdminConversations(chatId, from, messageId = null, page = 0) {
   if (!isOwner(from.id)) return safeSendMessage(chatId, "⛔ У вас нет доступа.");
-
-  const participants = new Set();
-  for (const conversation of conversations) {
-    participants.add(String(conversation.user1));
-    participants.add(String(conversation.user2));
-  }
 
   const text =
     `📜 История диалогов\n\n` +
     `💬 Всего диалогов: ${conversations.length}\n` +
-    `👥 Участников: ${participants.size}\n` +
+    `👥 Пользователей в базе: ${Object.keys(users).length}\n` +
     `💌 Сообщений: ${getConversationMessagesTotal()}\n\n` +
     `Новые диалоги всегда сверху. На странице по ${ADMIN_CONVERSATIONS_PAGE_SIZE} диалогов.`;
 
@@ -2750,9 +3452,8 @@ async function showAdminConversationDetails(chatId, from, conversationId, messag
   }
 
   const options = {
-    reply_markup: buildConversationMediaKeyboard(conversation, "admin_conversations") || {
-      inline_keyboard: [[{ text: "🔙 К диалогам", callback_data: "admin_conversations" }]],
-    },
+    reply_markup: buildAdminConversationDetailsKeyboard(conversation),
+    parse_mode: "HTML",
   };
   const text = formatConversationHistory(conversation, from.id, { admin: true });
 
@@ -2820,9 +3521,7 @@ async function showAdminPanel(chatId, from, messageId = null) {
 }
 
 function buildAdminUsersKeyboard() {
-  const userList = Object.values(users)
-    .sort((a, b) => new Date(b.lastActive || b.firstSeen || 0) - new Date(a.lastActive || a.firstSeen || 0))
-    .slice(0, 20);
+  const userList = getSortedQaParticipants();
 
   const keyboard = userList.map((user) => {
     const username = user.username ? `@${user.username}` : "нет username";
@@ -2840,10 +3539,36 @@ function buildAdminUsersKeyboard() {
   return { inline_keyboard: keyboard };
 }
 
+function getUserActivityScore(user) {
+  const userStats = stats[String(user.id)] || {};
+  return (
+    Number(userStats.messagesReceived || 0) +
+    Number(userStats.messagesSent || 0) +
+    Number(userStats.repliesSent || 0) +
+    Number(userStats.repliesReceived || 0) +
+    Number(userStats.linkClicks || 0)
+  );
+}
+
+function getUserSortDate(user) {
+  return new Date(user.lastActive || user.firstSeen || 0).getTime() || 0;
+}
+
+function getSortedQaParticipants() {
+  return Object.values(users).sort((a, b) => {
+    const activityDiff = getUserActivityScore(b) - getUserActivityScore(a);
+    if (activityDiff !== 0) return activityDiff;
+    return getUserSortDate(b) - getUserSortDate(a);
+  });
+}
+
 async function showAdminUsers(chatId, from, messageId = null) {
   if (!isOwner(from.id)) return safeSendMessage(chatId, "⛔ У вас нет доступа.");
 
+  syncStatsFromHistory();
   const totalUsers = Object.keys(users).length;
+  const participants = getSortedQaParticipants();
+  console.log(`✅ QA participants: ${participants.length}`);
 
   if (!totalUsers) {
     await safeSendMessage(chatId, "👥 Пользователей пока нет.");
@@ -2861,6 +3586,63 @@ async function showAdminUsers(chatId, from, messageId = null) {
   await safeSendMessage(chatId, text, options);
 }
 
+async function rebuildAdminStats(chatId, from, userId = "", messageId = null) {
+  if (!isOwner(from.id)) return safeSendMessage(chatId, "⛔ У вас нет доступа.");
+
+  recalculateStatsFromMessages();
+
+  console.log(`✅ Users loaded: ${Object.keys(users).length}`);
+  console.log(`✅ Messages loaded: ${messages.length}`);
+  console.log(`✅ Answers loaded: ${answers.length}`);
+  console.log(`✅ Conversations loaded: ${conversations.length}`);
+  console.log("✅ Stats rebuilt successfully");
+
+  if (userId && users[String(userId)]) {
+    await safeSendMessage(chatId, "✅ Статистика пересчитана и сохранена.");
+    return showAdminUserDetails(chatId, from, userId, messageId);
+  }
+
+  await safeSendMessage(chatId, "✅ Статистика пересчитана и сохранена.");
+}
+
+function getUserConversationHistoryCards(userId, limit = 10) {
+  const id = String(userId);
+  const usedQuestionIds = new Set();
+  const userConversations = conversations
+    .filter((conversation) => {
+      if (String(conversation.user1) === id || String(conversation.user2) === id) return true;
+      return Array.isArray(conversation.messages) && conversation.messages.some((message) => {
+        return String(message.fromId) === id || String(message.toId) === id;
+      });
+    })
+    .sort((a, b) => new Date(a.lastActivity || a.createdAt || 0) - new Date(b.lastActivity || b.createdAt || 0))
+    .filter((conversation) => {
+      const firstMessage = Array.isArray(conversation.messages) ? conversation.messages[0] : null;
+      const key = firstMessage && firstMessage.id ? String(firstMessage.id) : String(conversation.id);
+      if (usedQuestionIds.has(key)) return false;
+      usedQuestionIds.add(key);
+      return true;
+    })
+    .slice(-limit);
+
+  return userConversations.map((conversation, index) => {
+    const conversationMessages = getSortedConversationMessages(conversation);
+    const question = conversationMessages[0] || null;
+    const answer = conversationMessages.slice(1).find(Boolean) || null;
+    const questionText = question ? truncateText(question.text || getContentTypeLabel(question.contentType), 900) : "—";
+    const answerText = answer ? truncateText(answer.text || getContentTypeLabel(answer.contentType), 900) : "Ответов пока нет";
+    const dialogNumber = getConversationDisplayNumber(conversation);
+
+    return (
+      `📂 Диалог #${dialogNumber}\n\n` +
+      `❓ Вопрос\n${questionText}\n\n` +
+      `🕒 ${formatCardDate(question ? question.date : conversation.createdAt)}\n\n` +
+      `✅ Ответ\n${answerText}\n\n` +
+      `🕒 ${answer ? formatCardDate(answer.date) : "—"}`
+    );
+  });
+}
+
 async function showAdminUserDetails(chatId, from, userId, messageId = null) {
   if (!isOwner(from.id)) return safeSendMessage(chatId, "⛔ У вас нет доступа.");
 
@@ -2872,110 +3654,31 @@ async function showAdminUserDetails(chatId, from, userId, messageId = null) {
 
   const username = user.username ? `@${user.username}` : "нет username";
   const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || "Без имени";
-  const userStats = createStatsIfMissing(userId);
+  const userStats = getUserStatsFromHistory(userId);
+  console.log(`User ID: ${userId}`);
+  console.log(`Questions sent: ${userStats.messagesSent}`);
+  console.log(`Questions received: ${userStats.messagesReceived}`);
+  console.log(`Answers sent: ${userStats.repliesSent}`);
+  console.log(`Answers received: ${userStats.repliesReceived}`);
 
-  function getAnswersForQuestion(question) {
-    const fromMessageAnswers = Array.isArray(question.answers) ? question.answers : [];
-
-    const fromAnswersFile = answers.filter(
-      (answer) => String(answer.questionMessageId) === String(question.id)
-    );
-
-    const fromMessagesReplies = messages
-      .filter(
-        (item) =>
-          item.type === "reply" &&
-          String(item.originalMessageId) === String(question.id)
-      )
-      .map((item) => ({
-        id: item.id,
-        answerText: item.answerText || item.text || "—",
-        answeredBy: item.fromId,
-        sentTo: item.toId,
-        date: item.date,
-        status: item.status || "sent",
-      }));
-
-    const merged = [...fromMessageAnswers, ...fromAnswersFile, ...fromMessagesReplies];
-    const unique = [];
-    const usedIds = new Set();
-
-    for (const answer of merged) {
-      const answerId = answer.id || `${answer.answeredBy}_${answer.sentTo}_${answer.date}_${answer.answerText}`;
-      if (usedIds.has(answerId)) continue;
-      usedIds.add(answerId);
-      unique.push(answer);
-    }
-
-    return unique.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
-  }
-
-  const relatedQuestions = messages
-    .filter(
-      (item) =>
-        item.type === "anonymous_message" &&
-        (String(item.senderId) === String(userId) || String(item.receiverId) === String(userId))
-    )
-    .slice(-15)
-    .reverse();
-
-  const questionsAndAnswersText = relatedQuestions.length
-    ? relatedQuestions
-      .map((question, index) => {
-        const isReceived = String(question.receiverId) === String(userId);
-        const direction = isReceived ? "📥 Получил вопрос" : "📤 Отправил вопрос";
-        const secondUserLabel = isReceived ? "Отправитель" : "Получатель";
-        const secondUserId = isReceived ? question.senderId : question.receiverId;
-        const secondUserInfo = getUserShortInfo(secondUserId);
-        const questionText = truncateText(question.text || `[${question.contentType || "сообщение"}]`, 500);
-        const questionDate = formatDate(question.date);
-        const questionAnswers = getAnswersForQuestion(question);
-
-        const answersText = questionAnswers.length
-          ? questionAnswers
-            .map((answer, answerIndex) => {
-              const answerText = truncateText(answer.answerText || answer.text || "—", 500);
-              const answerDate = formatDate(answer.date);
-              const answeredBy = answer.answeredBy || answer.fromId || "—";
-              const sentTo = answer.sentTo || answer.toId || "—";
-
-              return (
-                `   ${answerIndex + 1}) 💬 Ответ: ${answerText}\n` +
-                `      👤 Ответил: ${getUserShortInfo(answeredBy)}\n` +
-                `      👥 Кому: ${getUserShortInfo(sentTo)}\n` +
-                `      🕒 Время: ${answerDate}`
-              );
-            })
-            .join("\n")
-          : "   Ответов пока нет";
-
-        return (
-          `${index + 1}. ${direction}\n` +
-          `   ❔ Вопрос: ${questionText}\n` +
-          `   👤 ${secondUserLabel}: ${secondUserInfo}\n` +
-          `   🕒 Время вопроса: ${questionDate}\n` +
-          `   📌 ID вопроса: ${question.id}\n` +
-          `   ─ Ответы:\n${answersText}`
-        );
-      })
-      .join("\n\n")
+  const userConversationCards = getUserConversationHistoryCards(userId, 10);
+  const questionsAndAnswersText = userConversationCards.length
+    ? userConversationCards.join("\n\n━━━━━━━━━━━━━━\n\n")
     : "Пока нет вопросов и ответов.";
 
-  const userOnlyAnswers = answers
-    .filter((item) => String(item.answeredBy) === String(userId) || String(item.sentTo) === String(userId))
-    .slice(-10)
-    .reverse();
+  const userOnlyAnswers = collectAnswerRecords()
+    .filter((item) => item.source === "answers")
+    .filter((item) => String(item.senderId) === String(userId) || String(item.receiverId) === String(userId))
+    .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
+    .slice(-10);
 
   const answersArchiveText = userOnlyAnswers.length
     ? userOnlyAnswers
       .map((item, index) => {
         return (
-          `${index + 1}. 💬 Ответ\n` +
-          `   ❔ Вопрос: ${truncateText(item.questionText || "—", 500)}\n` +
-          `   ✅ Ответ: ${truncateText(item.answerText || "—", 500)}\n` +
-          `   👤 Ответил: ${getUserShortInfo(item.answeredBy || "—")}\n` +
-          `   👥 Кому: ${getUserShortInfo(item.sentTo || "—")}\n` +
-          `   🕒 Время: ${formatDate(item.date)}`
+          `🧾 Ответ #${index + 1}\n\n` +
+          `${truncateText(item.answerText || "—", 900)}\n\n` +
+          `🕒 ${formatCardDate(item.date)}`
         );
       })
       .join("\n\n")
@@ -2990,8 +3693,8 @@ async function showAdminUserDetails(chatId, from, userId, messageId = null) {
     `Последняя активность: ${formatDate(user.lastActive)}\n\n` +
     `📊 Статистика:\n` +
     `👥 Переходов по ссылке: ${userStats.linkClicks}\n` +
-    `💌 Получил вопросов: ${userStats.messagesReceived}\n` +
-    `📨 Отправил вопросов: ${userStats.messagesSent}\n` +
+    `📩 Отправил вопросов: ${userStats.messagesSent}\n` +
+    `❤️ Получил вопросов: ${userStats.messagesReceived}\n` +
     `✍️ Отправил ответов: ${userStats.repliesSent}\n` +
     `💬 Получил ответов: ${userStats.repliesReceived}\n\n` +
     `━━━━━━━━━━━━━━\n\n` +
@@ -3001,7 +3704,10 @@ async function showAdminUserDetails(chatId, from, userId, messageId = null) {
 
   const options = {
     reply_markup: {
-      inline_keyboard: [[{ text: "🔙 К участникам", callback_data: "admin_users" }]],
+      inline_keyboard: [
+        [{ text: "🔄 Пересчитать статистику", callback_data: `admin_rebuild_stats:${user.id}` }],
+        [{ text: "🔙 К участникам", callback_data: "admin_users" }],
+      ],
     },
   };
 
@@ -3021,6 +3727,121 @@ async function showAdminAnnUsers(chatId, from) {
 async function showAdminMessages(chatId, from) {
   if (!isOwner(from.id)) return safeSendMessage(chatId, "⛔ У вас нет доступа.");
   await safeSendMessage(chatId, `💌 Последние сообщения:\n\n${getMessagesList(20)}`);
+}
+
+async function startBanUser(chatId, from, rawUserId) {
+  if (!isOwner(from.id)) return;
+  const userId = normalizeTelegramId(rawUserId);
+  if (!userId) return safeSendMessage(chatId, "ℹ️ Использование: /ban ID");
+
+  await safeSendMessage(
+    chatId,
+    `⚠️ Вы уверены, что хотите заблокировать пользователя?\n\n` +
+    `🆔 ${userId}\n` +
+    `👤 ${getUserShortInfo(userId)}`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "✅ Да, заблокировать", callback_data: `ban_confirm:${userId}` }],
+          [{ text: "❌ Отмена", callback_data: `ban_cancel:${userId}` }],
+        ],
+      },
+    }
+  );
+}
+
+async function startUnbanUser(chatId, from, rawUserId) {
+  if (!isOwner(from.id)) return;
+  const userId = normalizeTelegramId(rawUserId);
+  if (!userId) return safeSendMessage(chatId, "ℹ️ Использование: /unban ID");
+
+  await safeSendMessage(
+    chatId,
+    `⚠️ Разблокировать пользователя?\n\n🆔 ${userId}\n👤 ${getUserShortInfo(userId)}`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "✅ Да, разблокировать", callback_data: `unban_confirm:${userId}` }],
+          [{ text: "❌ Отмена", callback_data: `unban_cancel:${userId}` }],
+        ],
+      },
+    }
+  );
+}
+
+async function showBlockedUsers(chatId, from, messageId = null) {
+  if (!isOwner(from.id)) return safeSendMessage(chatId, "⛔ У вас нет доступа.");
+
+  const bannedEntries = Object.values(getBannedUsers())
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  const text = bannedEntries.length
+    ? `🚫 Заблокированные пользователи\n\n` + bannedEntries
+      .map((entry) => {
+        return `👤 ${getUserShortInfo(entry.userId)}\n🆔 ${entry.userId}\n📅 ${formatDate(entry.date)}`;
+      })
+      .join("\n\n")
+    : "🚫 Заблокированных пользователей нет.";
+
+  const keyboard = bannedEntries.map((entry) => ([
+    { text: `♻️ Разблокировать ${entry.userId}`, callback_data: `unban_confirm:${entry.userId}` },
+  ]));
+  keyboard.push([{ text: "🔙 Назад", callback_data: "admin_back" }]);
+
+  const options = { reply_markup: { inline_keyboard: keyboard } };
+  if (messageId) return safeEditMessageText(chatId, messageId, text, options);
+  return safeSendMessage(chatId, text, options);
+}
+
+async function handleBanDecisionCallback(query, action, userId = "") {
+  const chatId = query.message.chat.id;
+  const from = query.from;
+  const key = getCallbackMessageKey(query);
+
+  if (!isOwner(from.id)) return;
+
+  if (processedBanCallbacks.has(key) || processingBanCallbacks.has(key)) {
+    await clearCallbackInlineKeyboard(query);
+    return;
+  }
+
+  processingBanCallbacks.add(key);
+
+  try {
+    await clearCallbackInlineKeyboard(query);
+
+    if (action === "confirm") {
+      banUser(userId, from.id);
+      await safeSendMessage(chatId, "✅ Пользователь успешно заблокирован");
+      return;
+    }
+
+    if (action === "cancel") {
+      await safeSendMessage(chatId, "❌ Блокировка отменена");
+      return;
+    }
+  } finally {
+    processingBanCallbacks.delete(key);
+    markBanCallbackProcessed(key);
+  }
+}
+
+async function handleUnbanDecisionCallback(query, action, userId = "") {
+  const chatId = query.message.chat.id;
+  const from = query.from;
+
+  if (!isOwner(from.id)) return;
+
+  await clearCallbackInlineKeyboard(query);
+
+  if (action === "confirm") {
+    unbanUserGlobal(userId);
+    await safeSendMessage(chatId, "✅ Пользователь разблокирован");
+    return;
+  }
+
+  if (action === "cancel") {
+    await safeSendMessage(chatId, "❌ Разблокировка отменена");
+  }
 }
 
 async function showAdminStats(chatId, from) {
@@ -3070,6 +3891,7 @@ async function exportJson(chatId, from) {
     VIDEO_MESSAGES_FILE,
     VIDEO_NOTES_FILE,
     PHOTO_MESSAGES_FILE,
+    GIF_MESSAGES_FILE,
     DOCUMENT_MESSAGES_FILE,
     PREMIUM_REACTIONS_FILE,
   ];
@@ -3112,6 +3934,38 @@ async function broadcastToUsers(chatId, from, text) {
   await safeSendMessage(chatId, `✅ Рассылка завершена\n\n📨 Отправлено: ${sent}\n❌ Ошибок: ${failed}`);
 }
 
+async function startPushFlow(chatId, from) {
+  if (!isOwner(from.id)) return;
+  pendingPushMessages.set(String(from.id), { step: "text", text: "", createdAt: Date.now() });
+  await safeSendMessage(chatId, "Введите текст рассылки");
+}
+
+async function handlePushFlow(msg) {
+  const userId = String(msg.from.id);
+  const state = pendingPushMessages.get(userId);
+  if (!state || !isOwner(msg.from.id)) return false;
+
+  const text = getMessageText(msg).trim();
+  if (!text) {
+    await safeSendMessage(msg.chat.id, "Введите текст рассылки");
+    return true;
+  }
+
+  state.text = text;
+  state.step = "confirm";
+  pendingPushMessages.set(userId, state);
+
+  await safeSendMessage(msg.chat.id, `Отправить всем?\n\n${truncateText(text, 1200)}`, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "✅ Да", callback_data: "push_confirm" }],
+        [{ text: "❌ Отмена", callback_data: "push_cancel" }],
+      ],
+    },
+  });
+  return true;
+}
+
 async function sendPollToUsers(chatId, from, rawText) {
   if (!isOwner(from.id)) return;
 
@@ -3121,7 +3975,7 @@ async function sendPollToUsers(chatId, from, rawText) {
     .filter(Boolean);
 
   const question = parts.shift();
-  const options = parts.slice(0, 10);
+  const options = parts;
 
   if (!question || options.length < 2) {
     await safeSendMessage(chatId, "ℹ️ Использование: /poll Вопрос | Вариант 1 | Вариант 2");
@@ -3156,6 +4010,55 @@ async function sendPollToUsers(chatId, from, rawText) {
     chatId,
     `✅ Опрос отправлен\n\n📊 Получателей: ${pollRecord.recipients}\n📨 Отправлено: ${pollRecord.sent}\n❌ Ошибок: ${pollRecord.failed}`
   );
+}
+
+async function startPollFlow(chatId, from) {
+  if (!isOwner(from.id)) return;
+  pendingPollMessages.set(String(from.id), { step: "question", question: "", options: [], createdAt: Date.now() });
+  await safeSendMessage(chatId, "Введите вопрос опроса");
+}
+
+async function handlePollFlow(msg) {
+  const userId = String(msg.from.id);
+  const state = pendingPollMessages.get(userId);
+  if (!state || !isOwner(msg.from.id)) return false;
+
+  const text = getMessageText(msg).trim();
+  if (!text) return true;
+
+  if (state.step === "question") {
+    state.question = text;
+    state.step = "options";
+    pendingPollMessages.set(userId, state);
+    await safeSendMessage(msg.chat.id, "Введите варианты ответов, каждый с новой строки");
+    return true;
+  }
+
+  if (state.step === "options") {
+    state.options = text.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+    if (state.options.length < 2) {
+      await safeSendMessage(msg.chat.id, "Нужно минимум 2 варианта. Введите варианты ответов, каждый с новой строки");
+      return true;
+    }
+
+    state.step = "confirm";
+    pendingPollMessages.set(userId, state);
+    await safeSendMessage(
+      msg.chat.id,
+      `Отправить опрос всем?\n\n${state.question}\n\n${state.options.join("\n")}`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✅ Да", callback_data: "poll_confirm" }],
+            [{ text: "❌ Отмена", callback_data: "poll_cancel" }],
+          ],
+        },
+      }
+    );
+    return true;
+  }
+
+  return true;
 }
 
 bot.onText(/^\/start(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i, async (msg, match) => {
@@ -3250,6 +4153,15 @@ bot.onText(/^\/users$/, async (msg) => showAdminUsers(msg.chat.id, msg.from));
 bot.onText(/^\/annusers$/, async (msg) => showAdminAnnUsers(msg.chat.id, msg.from));
 bot.onText(/^\/messages$/, async (msg) => showAdminMessages(msg.chat.id, msg.from));
 bot.onText(/^\/export$/, async (msg) => exportJson(msg.chat.id, msg.from));
+bot.onText(/^\/ban(?:@[A-Za-z0-9_]+)?(?:\s+(\d+))?$/i, async (msg, match) => {
+  await startBanUser(msg.chat.id, msg.from, match && match[1]);
+});
+bot.onText(/^\/unban(?:@[A-Za-z0-9_]+)?(?:\s+(\d+))?$/i, async (msg, match) => {
+  await startUnbanUser(msg.chat.id, msg.from, match && match[1]);
+});
+bot.onText(/^\/push(?:@[A-Za-z0-9_]+)?$/i, async (msg) => {
+  await startPushFlow(msg.chat.id, msg.from);
+});
 bot.onText(/^\/id(?:@[A-Za-z0-9_]+)?(?:\s+(\d+))?$/i, async (msg, match) => {
   await handleOwnerIdLookup(msg.chat.id, msg.from, match && match[1]);
 });
@@ -3257,7 +4169,12 @@ bot.onText(/^\/broadcast(?:@[A-Za-z0-9_]+)?(?:\s+([\s\S]+))?$/i, async (msg, mat
   await broadcastToUsers(msg.chat.id, msg.from, match && match[1]);
 });
 bot.onText(/^\/poll(?:@[A-Za-z0-9_]+)?(?:\s+([\s\S]+))?$/i, async (msg, match) => {
-  await sendPollToUsers(msg.chat.id, msg.from, match && match[1]);
+  if (match && match[1]) {
+    await sendPollToUsers(msg.chat.id, msg.from, match[1]);
+    return;
+  }
+
+  await startPollFlow(msg.chat.id, msg.from);
 });
 
 bot.on("callback_query", async (query) => {
@@ -3269,11 +4186,64 @@ bot.on("callback_query", async (query) => {
   try {
     await bot.answerCallbackQuery(query.id).catch(() => { });
 
+    if (isGloballyBanned(from.id) && !isOwner(from.id)) return;
+
     if (data === "help") return showHelp(chatId, from);
     if (data === "ann_stats") return showUserStats(chatId, from);
     if (data === "more_messages") return showMoreMessages(chatId, from);
     if (data === "change_link") return changeLink(chatId, from);
     if (data === "support") return startSupport(chatId, from);
+
+    if (data === "push_cancel" || data === "poll_cancel") {
+      pendingPushMessages.delete(String(from.id));
+      pendingPollMessages.delete(String(from.id));
+      await safeSendMessage(chatId, "❌ Отменено.");
+      return;
+    }
+
+    if (data === "ban_cancel" || (data && data.startsWith("ban_cancel:"))) {
+      const userId = data.includes(":") ? data.split(":")[1] : "";
+      return handleBanDecisionCallback(query, "cancel", userId);
+    }
+
+    if (data && data.startsWith("ban_confirm:")) {
+      const userId = data.split(":")[1];
+      return handleBanDecisionCallback(query, "confirm", userId);
+    }
+
+    if (data && data.startsWith("unban_cancel:")) {
+      const userId = data.split(":")[1];
+      return handleUnbanDecisionCallback(query, "cancel", userId);
+    }
+
+    if (data && data.startsWith("unban_confirm:")) {
+      const userId = data.split(":")[1];
+      return handleUnbanDecisionCallback(query, "confirm", userId);
+    }
+
+    if (data === "push_confirm") {
+      if (!isOwner(from.id)) return;
+      const state = pendingPushMessages.get(String(from.id));
+      if (!state || !state.text) {
+        await safeSendMessage(chatId, "❌ Текст рассылки не найден.");
+        return;
+      }
+
+      pendingPushMessages.delete(String(from.id));
+      return broadcastToUsers(chatId, from, state.text);
+    }
+
+    if (data === "poll_confirm") {
+      if (!isOwner(from.id)) return;
+      const state = pendingPollMessages.get(String(from.id));
+      if (!state || !state.question || !Array.isArray(state.options) || state.options.length < 2) {
+        await safeSendMessage(chatId, "❌ Опрос не найден.");
+        return;
+      }
+
+      pendingPollMessages.delete(String(from.id));
+      return sendPollToUsers(chatId, from, [state.question, ...state.options].join(" | "));
+    }
 
     if (data && data.startsWith("reply_conv:")) {
       const [, conversationId, messageIdForReply = ""] = data.split(":");
@@ -3381,7 +4351,18 @@ bot.on("callback_query", async (query) => {
         return;
       }
 
-      addReaction(message.id, reaction.key);
+      console.log("Reaction key:", reaction.key);
+      console.log("Emoji:", reaction.emoji);
+      console.log("Emoji ID:", reaction.emojiId);
+      console.log("✅ Premium reaction selected");
+      console.log(`✅ Emoji ID: ${reaction.emojiId}`);
+
+      const reactionRecord = addReaction(message, reaction.key, from.id);
+      if (!reactionRecord) {
+        await safeSendMessage(chatId, "❌ Реакцию не удалось сохранить.");
+        return;
+      }
+
       await safeEditMessageReplyMarkup(
         chatId,
         query.message.message_id,
@@ -3390,7 +4371,10 @@ bot.on("callback_query", async (query) => {
 
       await safeSendMessage(
         message.fromId,
-        `🎭 На ваше сообщение отреагировали\n\n💬 Ваше сообщение:\n${escapeHtml(truncateText(message.text, 1200))}\n\n${premiumReactionHtml(reaction.key)}`,
+        `🎭 На ваше сообщение отреагировали\n\n` +
+        `💬 Сообщение:\n${escapeHtml(truncateText(message.text || getContentTypeLabel(message.contentType), 1200))}\n\n` +
+        `✨ Реакция: ${premiumReactionHtml(reaction.key)} ${escapeHtml(reaction.name)}\n\n` +
+        `🕒 ${escapeHtml(formatDate(reactionRecord.date))}`,
         { parse_mode: "HTML" }
       );
       return;
@@ -3517,6 +4501,10 @@ bot.on("callback_query", async (query) => {
 
     if (data === "admin_users") return showAdminUsers(chatId, from, messageId);
     if (data === "admin_qa") return showAdminUsers(chatId, from, messageId);
+    if (data && data.startsWith("admin_rebuild_stats:")) {
+      const userId = data.split(":")[1] || "";
+      return rebuildAdminStats(chatId, from, userId, messageId);
+    }
     if (data && data.startsWith("admin_user:")) {
       const userId = data.split(":")[1];
       return showAdminUserDetails(chatId, from, userId, messageId);
@@ -3524,6 +4512,7 @@ bot.on("callback_query", async (query) => {
     if (data === "admin_back") return showAdminPanel(chatId, from, messageId);
     if (data === "admin_ann_users") return showAdminAnnUsers(chatId, from);
     if (data === "admin_messages") return showAdminMessages(chatId, from);
+    if (data === "admin_blocked_users") return showBlockedUsers(chatId, from, messageId);
     if (data === "admin_conversations") return showAdminConversations(chatId, from, messageId);
     if (data && data.startsWith("admin_conversations:")) {
       const page = Number(data.split(":")[1] || 0);
@@ -3545,10 +4534,21 @@ bot.on("message", async (msg) => {
   try {
     if (!msg.from || !msg.chat) return;
     if (msg.text && msg.text.startsWith("/")) return;
+    if (isGloballyBanned(msg.from.id) && !isOwner(msg.from.id)) return;
 
     createOrUpdateUser(msg.from);
 
     const userId = String(msg.from.id);
+
+    if (pendingPushMessages.has(userId)) {
+      await handlePushFlow(msg);
+      return;
+    }
+
+    if (pendingPollMessages.has(userId)) {
+      await handlePollFlow(msg);
+      return;
+    }
 
     if (pendingSupportMessages.has(userId)) {
       await handleSupportMessage(msg);
