@@ -1964,8 +1964,9 @@ function removeMediaRecordsByMessageIds(messageIds) {
 async function sendDialogPayload(chatId, payload, options = {}) {
   const caption = payload.caption || "";
   const sendOptions = { ...options };
-  const mediaSource = payload.path && fs.existsSync(resolveStoredMediaPath(payload.path))
-    ? resolveStoredMediaPath(payload.path)
+  const localPath = payload.path ? resolveStoredMediaPath(payload.path) : "";
+  const mediaSource = localPath && fs.existsSync(localPath)
+    ? fs.createReadStream(localPath)
     : payload.fileId;
   let sent = null;
 
@@ -2064,11 +2065,17 @@ function getConversationMediaMessages(conversation) {
 
 async function sendAdminConversationMediaHistory(chatId, conversation) {
   const mediaMessages = getConversationMediaMessages(conversation);
+  await safeSendMessage(
+    chatId,
+    `🖼 Медиа диалога #${getConversationDisplayNumber(conversation)}\n` +
+    `Найдено: ${mediaMessages.length}`
+  );
 
   for (const message of mediaMessages) {
-    const sentMedia = await sendStoredConversationMedia(chatId, message, { caption: "" });
+    const sentMedia = await sendStoredConversationMedia(chatId, message, {
+      caption: formatAdminMediaCaption(conversation, message),
+    });
     if (!sentMedia) continue;
-    await safeSendMessage(chatId, formatAdminMediaCaption(conversation, message));
   }
 }
 
@@ -3242,7 +3249,11 @@ async function handleReplyMessage(msg, state) {
 function formatConversationMessageLine(message, viewerId, index, isAdminView = false, conversation = null) {
   const contentType = message.contentType || "text";
   const contentLabel = escapeHtml(getContentTypeLabel(contentType));
-  const text = escapeHtml(truncateText(message.text || getContentTypeLabel(contentType), isAdminView ? 1200 : 700));
+  const isMedia = contentType !== "text";
+  const fallbackText = isAdminView && isMedia
+    ? "Медиафайл доступен по кнопке 🖼 Медиа"
+    : getContentTypeLabel(contentType);
+  const text = escapeHtml(truncateText(message.text || fallbackText, isAdminView ? 1200 : 700));
   const date = escapeHtml(formatDate(message.date));
   const messageReactions = reactions
     .filter((item) => String(item.messageId) === String(message.id))
@@ -3284,13 +3295,19 @@ function formatConversationMessageLine(message, viewerId, index, isAdminView = f
   return `${index}. ${escapeHtml(author)} • ${date}\n${contentLabel}: ${text}${userDuration}${userReactions}`;
 }
 
+function getHistoryMessageFallbackText(message, isAdminView = false) {
+  const contentType = message && message.contentType ? message.contentType : "text";
+  if (isAdminView && contentType !== "text") return "Медиафайл доступен по кнопке 🖼 Медиа";
+  return getContentTypeLabel(contentType);
+}
+
 function formatCompactQuestionAnswerDialog(conversation, viewerId, isAdminView = false) {
   const allMessages = getSortedConversationMessages(conversation);
   if (allMessages.length !== 2) return "";
 
   const [question, answer] = allMessages;
-  const questionText = escapeHtml(truncateText(question.text || getContentTypeLabel(question.contentType), 1800));
-  const answerText = escapeHtml(truncateText(answer.text || getContentTypeLabel(answer.contentType), 1800));
+  const questionText = escapeHtml(truncateText(question.text || getHistoryMessageFallbackText(question, isAdminView), 1800));
+  const answerText = escapeHtml(truncateText(answer.text || getHistoryMessageFallbackText(answer, isAdminView), 1800));
   const title = `📂 Диалог #${getConversationDisplayNumber(conversation)}`;
 
   return (
@@ -3353,11 +3370,11 @@ function formatConversationHistory(conversation, viewerId, options = {}) {
       `📂 Диалог #${getConversationDisplayNumber(conversation)}\n\n` +
       `━━━━━━━━━━━━\n\n` +
       `❓ Вопрос\n\n` +
-      `${escapeHtml(question ? question.text || getContentTypeLabel(question.contentType) : "—")}\n\n` +
+      `${escapeHtml(question ? question.text || getHistoryMessageFallbackText(question, true) : "—")}\n\n` +
       `🕒 ${escapeHtml(formatCardDate(question ? question.date : conversation.createdAt))}\n\n` +
       `━━━━━━━━━━━━\n\n` +
       `✅ Ответ\n\n` +
-      `${escapeHtml(answer ? answer.text || getContentTypeLabel(answer.contentType) : "Ответов пока нет.")}\n\n` +
+      `${escapeHtml(answer ? answer.text || getHistoryMessageFallbackText(answer, true) : "Ответов пока нет.")}\n\n` +
       `🕒 ${answer ? escapeHtml(formatCardDate(answer.date)) : "—"}\n\n` +
       `━━━━━━━━━━━━\n\n` +
       `👤 Отправитель\n\n` +
@@ -3473,10 +3490,10 @@ function buildAdminConversationsKeyboard(page = 0) {
 
 function buildAdminConversationDetailsKeyboard(conversation) {
   const rows = [];
-  const mediaKeyboard = buildConversationMediaKeyboard(conversation);
-  if (mediaKeyboard && Array.isArray(mediaKeyboard.inline_keyboard)) {
-    rows.push(...mediaKeyboard.inline_keyboard);
-  }
+  rows.push([
+    { text: "📜 История", callback_data: `admin_conv:${conversation.id}` },
+    { text: "🖼 Медиа", callback_data: `media_history:${conversation.id}` },
+  ]);
 
   const sorted = getSortedConversations();
   const index = sorted.findIndex((item) => String(item.id) === String(conversation.id));
@@ -3533,12 +3550,10 @@ async function showAdminConversationDetails(chatId, from, conversationId, messag
 
   if (messageId) {
     await safeEditMessageText(chatId, messageId, text, options);
-    await sendAdminConversationMediaHistory(chatId, conversation);
     return;
   }
 
   await safeSendLongMessage(chatId, text, options);
-  await sendAdminConversationMediaHistory(chatId, conversation);
 }
 
 function getUsersList(limit = 20) {
@@ -4453,6 +4468,20 @@ bot.on("callback_query", async (query) => {
         `🕒 ${escapeHtml(formatDate(reactionRecord.date))}`,
         { parse_mode: "HTML" }
       );
+      return;
+    }
+
+    if (data && data.startsWith("media_history:")) {
+      if (!isOwner(from.id)) return;
+      const conversationId = data.split(":")[1];
+      const conversation = resolveConversationForCallback(conversationId, query);
+
+      if (!conversation) {
+        await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
+        return;
+      }
+
+      await sendAdminConversationMediaHistory(chatId, conversation);
       return;
     }
 
