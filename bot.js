@@ -986,6 +986,11 @@ function getUserShortInfo(userId) {
   return `${name} | ${username} | ID: ${user.id}`;
 }
 
+function getUserUsername(userId) {
+  const user = users[String(userId)];
+  return user && user.username ? `@${user.username}` : "нет username";
+}
+
 function splitText(text, limit = TELEGRAM_TEXT_LIMIT) {
   const value = String(text || "");
   if (value.length <= limit) return [value];
@@ -1527,6 +1532,37 @@ function getStoredMessageText(msg) {
   return text || getContentTypeLabel(contentType);
 }
 
+function normalizeMediaText(value) {
+  return String(value || "")
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .trim()
+    .toLowerCase();
+}
+
+function isMediaPlaceholderText(value, contentType) {
+  if (!value || contentType === "text") return false;
+  const normalizedValue = normalizeMediaText(value);
+  const normalizedLabel = normalizeMediaText(getContentTypeLabel(contentType));
+  return normalizedValue === normalizedLabel;
+}
+
+function getDisplayMessageText(message, options = {}) {
+  const contentType = message && message.contentType ? message.contentType : "text";
+  const label = getContentTypeLabel(contentType);
+
+  if (contentType === "text") {
+    return String(message && message.text ? message.text : label);
+  }
+
+  const caption = String(message && message.caption ? message.caption : "").trim();
+  if (caption && !isMediaPlaceholderText(caption, contentType)) return `${label}\n${caption}`;
+
+  const text = String(message && message.text ? message.text : "").trim();
+  if (text && !isMediaPlaceholderText(text, contentType)) return `${label}\n${text}`;
+
+  return label;
+}
+
 function isTextMessage(msg) {
   return getContentType(msg) === "text" && typeof msg.text === "string" && !msg.text.startsWith("/");
 }
@@ -1616,7 +1652,13 @@ function formatConversationSenderBlock(conversation, viewerId, options = {}) {
   }
 
   const sender = getConversationSenderInfo(conversation);
-  return `👤 Отправитель\nID: ${sender.id}\nUsername: ${sender.username}\nИмя: ${sender.name}`;
+  return (
+    `👤 Отправитель\n\n` +
+    `🆔 ID: ${sender.id}\n` +
+    `🔗 Username: ${sender.username}\n` +
+    `📝 Имя: ${sender.name}\n\n` +
+    `━━━━━━━━━━━━`
+  );
 }
 
 function createConversation(user1, user2, options = {}) {
@@ -2020,6 +2062,39 @@ function getStoredMediaRecordForMessage(message) {
   return null;
 }
 
+function getAllStoredMediaRecords() {
+  return [
+    ...voiceMessages,
+    ...videoMessages,
+    ...videoNotes,
+    ...photoMessages,
+    ...gifMessages,
+    ...documentMessages,
+  ].filter(Boolean);
+}
+
+function normalizeStoredMediaRecord(record) {
+  if (!record) return null;
+  const contentType = record.contentType || record.type || "document";
+
+  return {
+    id: String(record.messageId || record.id || createId("media")),
+    conversationId: record.conversationId || "",
+    fromId: Number(record.senderId || record.fromId || 0),
+    toId: Number(record.receiverId || record.toId || 0),
+    senderId: Number(record.senderId || record.fromId || 0),
+    receiverId: Number(record.receiverId || record.toId || 0),
+    text: record.caption || getContentTypeLabel(contentType),
+    contentType,
+    path: record.path || "",
+    fileId: record.fileId || record.file_id || "",
+    fileUniqueId: record.fileUniqueId || record.file_unique_id || "",
+    caption: record.caption || "",
+    duration: Number(record.duration || 0),
+    date: record.date || "",
+  };
+}
+
 function mergeMessageMediaData(message) {
   if (!message) return null;
   const storedMedia = getStoredMediaRecordForMessage(message);
@@ -2053,10 +2128,16 @@ async function sendDialogPayload(chatId, payload, options = {}) {
   const caption = payload.caption || "";
   const sendOptions = { ...options };
   const localPath = payload.path ? resolveStoredMediaPath(payload.path) : "";
+  const fileExists = Boolean(localPath && fs.existsSync(localPath));
   const mediaSource = localPath && fs.existsSync(localPath)
     ? fs.createReadStream(localPath)
     : payload.fileId;
   let sent = null;
+
+  console.log("MEDIA TYPE:", payload.contentType);
+  console.log("MEDIA PATH:", payload.path || "");
+  console.log("FILE EXISTS:", fileExists);
+  console.log("FILE ID:", payload.fileId || "");
 
   try {
     if (payload.contentType === "voice" && mediaSource) {
@@ -2104,10 +2185,9 @@ async function sendStoredConversationMedia(chatId, message, options = {}) {
   const storedPath = mediaMessage ? mediaMessage.path || "" : "";
   const localPath = storedPath ? resolveStoredMediaPath(storedPath) : "";
   const hasLocalFile = Boolean(localPath && fs.existsSync(localPath));
-  const mediaSource = hasLocalFile ? localPath : fileId;
   const sendOptions = { ...options };
 
-  if (!mediaMessage || !mediaSource) {
+  if (!mediaMessage || (!hasLocalFile && !fileId)) {
     await safeSendMessage(chatId, "❌ Файл не найден в базе данных.");
     return null;
   }
@@ -2115,8 +2195,8 @@ async function sendStoredConversationMedia(chatId, message, options = {}) {
   const captionLines = [
     getContentTypeLabel(mediaMessage.contentType),
     mediaMessage.duration ? `⏱ Длительность: ${formatDuration(mediaMessage.duration)}` : "",
-    mediaMessage.caption || "",
-    mediaMessage.text && mediaMessage.text !== getContentTypeLabel(mediaMessage.contentType) ? mediaMessage.text : "",
+    mediaMessage.caption && !isMediaPlaceholderText(mediaMessage.caption, mediaMessage.contentType) ? mediaMessage.caption : "",
+    mediaMessage.text && !isMediaPlaceholderText(mediaMessage.text, mediaMessage.contentType) ? mediaMessage.text : "",
   ].filter(Boolean);
   const mediaCaption = Object.prototype.hasOwnProperty.call(sendOptions, "caption")
     ? String(sendOptions.caption || "")
@@ -2128,7 +2208,19 @@ async function sendStoredConversationMedia(chatId, message, options = {}) {
     fileId,
     path: hasLocalFile ? storedPath : "",
     caption: mediaCaption,
-  }, sendOptions);
+  }, sendOptions).then(async (sentMedia) => {
+    if (!sentMedia) {
+      await safeSendMessage(
+        chatId,
+        `❌ Не удалось отправить медиа\n\n` +
+        `Тип: ${mediaMessage.contentType}\n` +
+        `path: ${storedPath || "—"}\n` +
+        `fileId: ${fileId || "—"}`
+      );
+    }
+
+    return sentMedia;
+  });
 }
 
 function getConversationMessageRole(conversation, message) {
@@ -2145,21 +2237,123 @@ function formatAdminMediaCaption(conversation, message) {
   );
 }
 
+function formatConversationSenderCard(conversation, message = null) {
+  const senderId = message ? message.fromId : conversation && conversation.user1;
+  const sender = getUserShortInfo(senderId);
+  const username = getUserUsername(senderId);
+
+  return (
+    `👤 Отправитель\n\n` +
+    `🆔 ID: ${senderId || "—"}\n` +
+    `🔗 Username: ${username || "нет username"}\n` +
+    `📝 Имя: ${sender}\n\n` +
+    `━━━━━━━━━━━━`
+  );
+}
+
 function getConversationMediaMessages(conversation) {
+  if (!conversation) return [];
+
+  const byId = new Map();
+
+  for (const message of getSortedConversationMessages(conversation)) {
+    const mediaMessage = mergeMessageMediaData(message);
+    if (!mediaMessage || mediaMessage.contentType === "text") continue;
+    if (!mediaMessage.path && !mediaMessage.fileId && !mediaMessage.file_id) continue;
+    byId.set(String(mediaMessage.id), mediaMessage);
+  }
+
+  for (const record of getAllStoredMediaRecords()) {
+    if (String(record.conversationId || "") !== String(conversation.id)) continue;
+    const mediaMessage = normalizeStoredMediaRecord(record);
+    if (!mediaMessage || mediaMessage.contentType === "text") continue;
+    byId.set(String(mediaMessage.id), mediaMessage);
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+}
+
+function getConversationInlineMediaMessages(conversation) {
   return getSortedConversationMessages(conversation)
     .map(mergeMessageMediaData)
     .filter((message) => message && message.contentType !== "text" && (message.path || message.fileId || message.file_id));
 }
 
+function getRecentAdminMediaMessages(limit = 10) {
+  const allowedTypes = new Set(["photo", "video", "video_note"]);
+  const byKey = new Map();
+
+  for (const conversation of conversations) {
+    for (const message of getConversationMediaMessages(conversation)) {
+      if (!allowedTypes.has(message.contentType)) continue;
+      const key = `${conversation.id}:${message.id}`;
+      byKey.set(key, {
+        ...message,
+        conversationId: message.conversationId || conversation.id,
+      });
+    }
+  }
+
+  return [...byKey.values()]
+    .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+    .slice(0, limit);
+}
+
+async function showAdminRecentMedia(chatId, from) {
+  if (!isOwner(from.id)) return safeSendMessage(chatId, "⛔ У вас нет доступа.");
+
+  const recentMedia = getRecentAdminMediaMessages(10);
+  await safeSendMessage(chatId, `🖼 Последние медиа\nНайдено: ${recentMedia.length}`);
+
+  for (const message of recentMedia) {
+    const conversation = findConversation(message.conversationId);
+    await sendStoredConversationMedia(chatId, message, {
+      caption: conversation
+        ? formatAdminMediaCaption(conversation, message)
+        : `🕒 ${formatCardDate(message.date)}`,
+    });
+  }
+}
+
 async function sendAdminConversationMediaHistory(chatId, conversation) {
   const mediaMessages = getConversationMediaMessages(conversation);
+  const conversationJsonMediaCount = getSortedConversationMessages(conversation)
+    .map(mergeMessageMediaData)
+    .filter((message) => message && message.contentType !== "text" && (message.path || message.fileId || message.file_id))
+    .length;
+
   await safeSendMessage(
     chatId,
     `🖼 Медиа диалога #${getConversationDisplayNumber(conversation)}\n` +
     `Найдено: ${mediaMessages.length}`
   );
 
+  if (!mediaMessages.length) {
+    await safeSendMessage(
+      chatId,
+      `❌ Медиа не найдено в conversations.json\n\n` +
+      `photoMessages: ${photoMessages.length}\n` +
+      `videoMessages: ${videoMessages.length}\n` +
+      `videoNotes: ${videoNotes.length}\n` +
+      `voiceMessages: ${voiceMessages.length}`
+    );
+    return;
+  }
+
+  if (!conversationJsonMediaCount && mediaMessages.length) {
+    await safeSendMessage(
+      chatId,
+      `❌ Медиа не найдено в conversations.json\n\n` +
+      `photoMessages: ${photoMessages.length}\n` +
+      `videoMessages: ${videoMessages.length}\n` +
+      `videoNotes: ${videoNotes.length}\n` +
+      `voiceMessages: ${voiceMessages.length}`
+    );
+  }
+
   for (const message of mediaMessages) {
+    await safeSendMessage(chatId, formatConversationSenderCard(conversation, message));
     const sentMedia = await sendStoredConversationMedia(chatId, message, {
       caption: formatAdminMediaCaption(conversation, message),
     });
@@ -2257,7 +2451,10 @@ function conversationMessageKeyboard(conversationId, viewerId, messageId = "") {
         { text: blockText, callback_data: blockCallback },
         { text: "🗑 Удалить диалог", callback_data: `delete_dialog:${conversationId}` },
       ],
-      [{ text: "📜 История", callback_data: `history:${conversationId}` }],
+      [
+        { text: "📜 История", callback_data: `history:${conversationId}` },
+        { text: "🖼 Медиа", callback_data: `media_history:${conversationId}` },
+      ],
     ],
   };
 }
@@ -2620,6 +2817,7 @@ function adminKeyboard() {
       [{ text: "🤖 Пользователи /annstart", callback_data: "admin_ann_users" }],
       [{ text: "💌 Все сообщения", callback_data: "admin_messages" }],
       [{ text: "📂 Диалоги", callback_data: "admin_conversations" }],
+      [{ text: "🖼 Последние медиа", callback_data: "admin_recent_media" }],
       [{ text: "🚫 Заблокированные пользователи", callback_data: "admin_blocked_users" }],
       [{ text: "📊 Общая статистика", callback_data: "admin_stats" }],
       [{ text: "📁 Экспорт JSON", callback_data: "admin_export" }],
@@ -2899,8 +3097,17 @@ async function showAnnBot(chatId, from) {
             username: normalizeUsername(item.senderUsername || ""),
             name: item.senderName || "—",
           };
-        const text = item.text || `[${item.contentType || "сообщение"}]`;
-        return `${index + 1}. 👤 Отправитель:\n   ID: ${sender.id}\n   Username: ${sender.username}\n   Имя: ${sender.name}\n   💬 Сообщение: ${text}\n   📅 Дата: ${formatDate(item.date)}\n   💬 Диалог: ${item.conversationId || "—"}`;
+        const text = getDisplayMessageText(item);
+        return (
+          `${index + 1}. 👤 Отправитель\n\n` +
+          `🆔 ID: ${sender.id}\n` +
+          `🔗 Username: ${sender.username}\n` +
+          `📝 Имя: ${sender.name}\n\n` +
+          `━━━━━━━━━━━━\n\n` +
+          `❓ Вопрос\n${text}\n\n` +
+          `📅 Дата: ${formatDate(item.date)}\n` +
+          `💬 Диалог: ${item.conversationId || "—"}`
+        );
       })
       .join("\n\n")
     : "Пока сообщений нет.";
@@ -3071,14 +3278,17 @@ async function handleAnonymousMessage(msg, state) {
   const senderInfoBlock = formatConversationSenderBlock(conversation, receiverId, {
     initialAnonymousMessage: true,
   });
-  const receiverText =
-    `💌 Новое анонимное сообщение\n\n` +
-    `${getContentTypeLabel(contentType)}:\n${text}` +
-    (duration ? `\n⏱ Длительность: ${formatDuration(duration)}` : "") +
-    (senderInfoBlock ? `\n\n${senderInfoBlock}` : "");
+  const questionText =
+    `❓ Вопрос\n\n` +
+    `${getDisplayMessageText({ text, caption, contentType })}` +
+    (duration ? `\n⏱ Длительность: ${formatDuration(duration)}` : "");
+
+  if (senderInfoBlock) {
+    await safeSendMessage(receiverId, senderInfoBlock);
+  }
 
   if (contentType === "text") {
-    sentToReceiver = await safeSendMessage(receiverId, receiverText, {
+    sentToReceiver = await safeSendMessage(receiverId, questionText, {
       reply_markup: messageKeyboard,
     });
   } else {
@@ -3086,7 +3296,7 @@ async function handleAnonymousMessage(msg, state) {
       contentType,
       path: mediaPath,
       fileId,
-      caption: receiverText,
+      caption: questionText,
     }, {
       reply_markup: messageKeyboard,
     });
@@ -3226,8 +3436,7 @@ async function handleReplyMessage(msg, state) {
     `💌 Новое сообщение в анонимном диалоге\n\n` +
     `↩️ Ответ на:\n` +
     `${truncateText(questionText, 800)}\n\n` +
-    `${getContentTypeLabel(contentType)} от собеседника:\n` +
-    `${answerText}` +
+    `${getDisplayMessageText({ text: answerText, caption, contentType })} от собеседника` +
     (duration ? `\n⏱ Длительность: ${formatDuration(duration)}` : "");
 
   let sentToReceiver = null;
@@ -3337,11 +3546,8 @@ async function handleReplyMessage(msg, state) {
 function formatConversationMessageLine(message, viewerId, index, isAdminView = false, conversation = null) {
   const contentType = message.contentType || "text";
   const contentLabel = escapeHtml(getContentTypeLabel(contentType));
-  const isMedia = contentType !== "text";
-  const fallbackText = isAdminView && isMedia
-    ? "Медиафайл доступен по кнопке 🖼 Медиа"
-    : getContentTypeLabel(contentType);
-  const text = escapeHtml(truncateText(message.text || fallbackText, isAdminView ? 1200 : 700));
+  const rawText = getDisplayMessageText(message, { adminHint: isAdminView });
+  const text = escapeHtml(truncateText(rawText, isAdminView ? 1200 : 700));
   const date = escapeHtml(formatDate(message.date));
   const messageReactions = reactions
     .filter((item) => String(item.messageId) === String(message.id))
@@ -3369,24 +3575,24 @@ function formatConversationMessageLine(message, viewerId, index, isAdminView = f
               : "";
 
   if (isAdminView) {
+    const body = contentType === "text" ? `${contentLabel}: ${text}` : text;
     return (
       `${index}. ${date}\n` +
       `   👤 От: ${escapeHtml(getUserShortInfo(message.fromId))}\n` +
       `   👥 Кому: ${escapeHtml(getUserShortInfo(message.toId))}\n` +
-      `   ${contentLabel}: ${text}${duration}${mediaAction}${reactionBlock}`
+      `   ${body}${duration}${mediaAction}${reactionBlock}`
     );
   }
 
   const author = String(message.fromId) === String(viewerId) ? "Вы" : "Собеседник";
   const userDuration = message.duration ? `\n⏱ Длительность: ${formatDuration(message.duration)}` : "";
   const userReactions = reactionBlock ? reactionBlock.replace(/^   /gm, "") : "";
-  return `${index}. ${escapeHtml(author)} • ${date}\n${contentLabel}: ${text}${userDuration}${userReactions}`;
+  const userBody = contentType === "text" ? `${contentLabel}: ${text}` : text;
+  return `${index}. ${escapeHtml(author)} • ${date}\n${userBody}${userDuration}${userReactions}`;
 }
 
 function getHistoryMessageFallbackText(message, isAdminView = false) {
-  const contentType = message && message.contentType ? message.contentType : "text";
-  if (isAdminView && contentType !== "text") return "Медиафайл доступен по кнопке 🖼 Медиа";
-  return getContentTypeLabel(contentType);
+  return getDisplayMessageText(message, { adminHint: isAdminView });
 }
 
 function formatCompactQuestionAnswerDialog(conversation, viewerId, isAdminView = false) {
@@ -3412,11 +3618,7 @@ function formatCompactQuestionAnswerDialog(conversation, viewerId, isAdminView =
 
 function buildConversationMediaKeyboard(conversation, backCallback = "") {
   const rows = [];
-  const mediaMessages = Array.isArray(conversation.messages)
-    ? getSortedConversationMessages(conversation)
-      .map(mergeMessageMediaData)
-      .filter((message) => (message.path || message.fileId || message.file_id) && message.contentType !== "text")
-    : [];
+  const mediaMessages = getConversationMediaMessages(conversation);
 
   for (const message of mediaMessages.slice(-20)) {
     const label = message.contentType === "voice"
@@ -3450,27 +3652,18 @@ function formatConversationHistory(conversation, viewerId, options = {}) {
   if (isAdminView) {
     const question = allMessages[0] || null;
     const answer = allMessages.slice(1).find(Boolean) || null;
-    const senderId = question ? question.fromId : conversation.user1;
-    const receiverId = question ? question.toId : conversation.user2;
     const extraMessages = allMessages.slice(2);
 
     const header =
       `📂 Диалог #${getConversationDisplayNumber(conversation)}\n\n` +
       `━━━━━━━━━━━━\n\n` +
       `❓ Вопрос\n\n` +
-      `${escapeHtml(question ? question.text || getHistoryMessageFallbackText(question, true) : "—")}\n\n` +
+      `${escapeHtml(question ? getHistoryMessageFallbackText(question, true) : "—")}\n\n` +
       `🕒 ${escapeHtml(formatCardDate(question ? question.date : conversation.createdAt))}\n\n` +
       `━━━━━━━━━━━━\n\n` +
       `✅ Ответ\n\n` +
-      `${escapeHtml(answer ? answer.text || getHistoryMessageFallbackText(answer, true) : "Ответов пока нет.")}\n\n` +
-      `🕒 ${answer ? escapeHtml(formatCardDate(answer.date)) : "—"}\n\n` +
-      `━━━━━━━━━━━━\n\n` +
-      `👤 Отправитель\n\n` +
-      `${escapeHtml(getUserShortInfo(senderId))}\n\n` +
-      `🆔 ${escapeHtml(senderId)}\n\n` +
-      `👥 Получатель\n\n` +
-      `${escapeHtml(getUserShortInfo(receiverId))}\n\n` +
-      `🆔 ${escapeHtml(receiverId)}`;
+      `${escapeHtml(answer ? getHistoryMessageFallbackText(answer, true) : "Ответов пока нет.")}\n\n` +
+      `🕒 ${answer ? escapeHtml(formatCardDate(answer.date)) : "—"}`;
 
     if (!extraMessages.length) return `${header}\n\n━━━━━━━━━━━━`;
 
@@ -3635,12 +3828,16 @@ async function showAdminConversationDetails(chatId, from, conversationId, messag
     parse_mode: "HTML",
   };
   const text = formatConversationHistory(conversation, from.id, { admin: true });
+  const firstMessage = getSortedConversationMessages(conversation)[0] || null;
+  const senderCard = formatConversationSenderCard(conversation, firstMessage);
 
   if (messageId) {
+    await safeSendMessage(chatId, senderCard);
     await safeEditMessageText(chatId, messageId, text, options);
     return;
   }
 
+  await safeSendMessage(chatId, senderCard);
   await safeSendLongMessage(chatId, text, options);
 }
 
@@ -3808,8 +4005,8 @@ function getUserConversationHistoryCards(userId, limit = 10) {
     const conversationMessages = getSortedConversationMessages(conversation);
     const question = conversationMessages[0] || null;
     const answer = conversationMessages.slice(1).find(Boolean) || null;
-    const questionText = question ? truncateText(question.text || getContentTypeLabel(question.contentType), 900) : "—";
-    const answerText = answer ? truncateText(answer.text || getContentTypeLabel(answer.contentType), 900) : "Ответов пока нет";
+    const questionText = question ? truncateText(getDisplayMessageText(question), 900) : "—";
+    const answerText = answer ? truncateText(getDisplayMessageText(answer), 900) : "Ответов пока нет";
     const dialogNumber = getConversationDisplayNumber(conversation);
 
     return (
@@ -4560,12 +4757,16 @@ bot.on("callback_query", async (query) => {
     }
 
     if (data && data.startsWith("media_history:")) {
-      if (!isOwner(from.id)) return;
       const conversationId = data.split(":")[1];
       const conversation = resolveConversationForCallback(conversationId, query);
 
       if (!conversation) {
         await safeSendMessage(chatId, "❌ Диалог уже удалён или недоступен.");
+        return;
+      }
+
+      if (!isConversationParticipant(conversation, from.id) && !isOwner(from.id)) {
+        await safeSendMessage(chatId, "⛔ У вас нет доступа.");
         return;
       }
 
@@ -4708,6 +4909,7 @@ bot.on("callback_query", async (query) => {
     if (data === "admin_back") return showAdminPanel(chatId, from, messageId);
     if (data === "admin_ann_users") return showAdminAnnUsers(chatId, from);
     if (data === "admin_messages") return showAdminMessages(chatId, from);
+    if (data === "admin_recent_media") return showAdminRecentMedia(chatId, from);
     if (data === "admin_blocked_users") return showBlockedUsers(chatId, from, messageId);
     if (data === "admin_conversations") return showAdminConversations(chatId, from, messageId);
     if (data && data.startsWith("admin_conversations:")) {
