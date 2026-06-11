@@ -2,6 +2,8 @@ const fs = require("fs");
 const path = require("path");
 const TelegramBot = require("node-telegram-bot-api");
 
+const APP_DIR = path.dirname(__filename);
+
 loadEnvFile();
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -14,11 +16,14 @@ if (!BOT_TOKEN) {
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-const LEGACY_DATA_DIR = __dirname;
-const DATA_DIR = path.resolve(process.env.BOT_DATA_DIR || path.join(__dirname, "data"));
+const LEGACY_DATA_DIR = APP_DIR;
+const LEGACY_LOCAL_DATA_DIR = path.join(APP_DIR, "data");
+const LEGACY_MEDIA_DIR = path.join(APP_DIR, "media");
+const IS_RAILWAY = isRailwayRuntime();
+const DATA_DIR = path.resolve(process.env.BOT_DATA_DIR || (IS_RAILWAY ? "/data" : LEGACY_LOCAL_DATA_DIR));
 ensureDataDirectory(DATA_DIR);
 
-const MEDIA_DIR = path.join(__dirname, "media");
+const MEDIA_DIR = path.resolve(process.env.BOT_MEDIA_DIR || (IS_RAILWAY ? "/data/media" : LEGACY_MEDIA_DIR));
 const MEDIA_PHOTOS_DIR = path.join(MEDIA_DIR, "photos");
 const MEDIA_VIDEOS_DIR = path.join(MEDIA_DIR, "videos");
 const MEDIA_VOICES_DIR = path.join(MEDIA_DIR, "voices");
@@ -33,6 +38,7 @@ const MEDIA_TEMP_DIR = path.join(MEDIA_DIR, "temp");
   MEDIA_STICKERS_DIR,
   MEDIA_TEMP_DIR,
 ].forEach(ensureDataDirectory);
+migrateLegacyStorage();
 
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const ANN_USERS_FILE = path.join(DATA_DIR, "annUsers.json");
@@ -132,7 +138,7 @@ const processedBanCallbacks = new Set();
 const startCooldown = new Map();
 
 function loadEnvFile() {
-  const envPath = path.join(__dirname, ".env");
+  const envPath = path.join(APP_DIR, ".env");
   if (!fs.existsSync(envPath)) return;
 
   try {
@@ -167,6 +173,64 @@ function ensureDataDirectory(dirPath) {
   } catch (error) {
     console.error(`❌ Save error: ${error.message}`);
     process.exit(1);
+  }
+}
+
+function isSamePath(firstPath, secondPath) {
+  return path.resolve(firstPath) === path.resolve(secondPath);
+}
+
+function copyFileIfMissing(sourcePath, targetPath) {
+  if (!fs.existsSync(sourcePath) || fs.existsSync(targetPath)) return false;
+
+  try {
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.copyFileSync(sourcePath, targetPath);
+    return true;
+  } catch (error) {
+    console.error(`❌ Migration error: ${sourcePath} -> ${targetPath} - ${error.message}`);
+    return false;
+  }
+}
+
+function copyDirectoryFilesIfMissing(sourceDir, targetDir) {
+  if (!fs.existsSync(sourceDir) || isSamePath(sourceDir, targetDir)) return 0;
+
+  let copied = 0;
+  let entries = [];
+
+  try {
+    entries = fs.readdirSync(sourceDir, { withFileTypes: true });
+  } catch (error) {
+    console.error(`❌ Migration error: ${sourceDir} - ${error.message}`);
+    return copied;
+  }
+
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+
+    if (entry.isDirectory()) {
+      copied += copyDirectoryFilesIfMissing(sourcePath, targetPath);
+      continue;
+    }
+
+    if (entry.isFile() && copyFileIfMissing(sourcePath, targetPath)) copied += 1;
+  }
+
+  return copied;
+}
+
+function migrateLegacyStorage() {
+  const copiedDataFiles = copyDirectoryFilesIfMissing(LEGACY_LOCAL_DATA_DIR, DATA_DIR);
+  const copiedMediaFiles = copyDirectoryFilesIfMissing(LEGACY_MEDIA_DIR, MEDIA_DIR);
+
+  if (copiedDataFiles) {
+    console.log(`📦 Migrated data files: ${copiedDataFiles} -> ${DATA_DIR}`);
+  }
+
+  if (copiedMediaFiles) {
+    console.log(`📦 Migrated media files: ${copiedMediaFiles} -> ${MEDIA_DIR}`);
   }
 }
 
@@ -519,13 +583,29 @@ function isContainerRuntime() {
   );
 }
 
+function isRailwayRuntime() {
+  return Boolean(
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_PROJECT_ID ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.RAILWAY_VOLUME_MOUNT_PATH
+  );
+}
+
 function logDataStorageInfo() {
   console.log(`📁 Data directory: ${DATA_DIR}`);
+  console.log(`📁 Media directory: ${MEDIA_DIR}`);
 
-  if (isContainerRuntime() && !process.env.BOT_DATA_DIR) {
+  if (IS_RAILWAY && !process.env.BOT_DATA_DIR) {
+    console.warn("⚠️ Для Railway нужен Volume и BOT_DATA_DIR=/data");
+  } else if (isContainerRuntime() && !process.env.BOT_DATA_DIR) {
     console.warn(
       "⚠️ Container runtime detected. Set BOT_DATA_DIR to a mounted persistent directory to keep JSON data after container rebuilds."
     );
+  }
+
+  if (IS_RAILWAY && !process.env.BOT_MEDIA_DIR) {
+    console.warn("⚠️ Для Railway нужен Volume и BOT_MEDIA_DIR=/data/media");
   }
 }
 
@@ -1389,13 +1469,21 @@ function isLocallyStoredMediaType(contentType) {
 
 function toRelativeMediaPath(filePath) {
   if (!filePath) return "";
-  const relativePath = path.relative(__dirname, filePath);
+  const relativePath = path.relative(MEDIA_DIR, filePath);
   return relativePath.startsWith("..") ? filePath : relativePath;
 }
 
 function resolveStoredMediaPath(filePath) {
   if (!filePath) return "";
-  return path.isAbsolute(filePath) ? filePath : path.join(__dirname, filePath);
+  if (path.isAbsolute(filePath)) return filePath;
+
+  const mediaDirPath = path.join(MEDIA_DIR, filePath);
+  if (fs.existsSync(mediaDirPath)) return mediaDirPath;
+
+  const legacyProjectPath = path.join(APP_DIR, filePath);
+  if (fs.existsSync(legacyProjectPath)) return legacyProjectPath;
+
+  return mediaDirPath;
 }
 
 function getSafeMediaFileName(messageId, downloadedPath) {
@@ -2399,7 +2487,7 @@ function scanJsonForUser(data, targetId, sourceFile, result) {
     const directMatch = hasTargetIdInObject(value, targetId);
     if (directMatch) {
       result.found = true;
-      result.sources.add(path.relative(__dirname, sourceFile) || path.basename(sourceFile));
+      result.sources.add(path.relative(APP_DIR, sourceFile) || path.basename(sourceFile));
       collectProfileHints(value, result);
 
       if (looksLikeMessageRecord(value, sourceFile)) {
@@ -2410,7 +2498,7 @@ function scanJsonForUser(data, targetId, sourceFile, result) {
     for (const [key, child] of Object.entries(value)) {
       if (normalizeTelegramId(key) === targetId) {
         result.found = true;
-        result.sources.add(path.relative(__dirname, sourceFile) || path.basename(sourceFile));
+        result.sources.add(path.relative(APP_DIR, sourceFile) || path.basename(sourceFile));
         if (child && typeof child === "object") collectProfileHints(child, result);
       }
 
@@ -2449,7 +2537,7 @@ async function findUserDeepByTelegramId(targetId) {
     scanJsonForUser(data, targetId, filePath, result);
   }
 
-  const jsonFiles = await listJsonFilesDeep(__dirname);
+  const jsonFiles = await listJsonFilesDeep(APP_DIR);
   for (const filePath of jsonFiles) {
     const data = await readJsonIfExists(filePath);
     if (data !== null) scanJsonForUser(data, targetId, filePath, result);
