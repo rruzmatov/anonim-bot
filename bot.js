@@ -1895,6 +1895,7 @@ function saveMediaRecord(record) {
     id: record.id,
     messageId: record.messageId,
     type: record.contentType,
+    contentType: record.contentType,
     path: record.path || "",
     fileId: record.fileId,
     fileUniqueId: record.fileUniqueId || "",
@@ -1916,6 +1917,38 @@ function saveMediaRecord(record) {
   }
 
   saveMediaStore(record.contentType);
+}
+
+function getStoredMediaRecordForMessage(message) {
+  if (!message || !message.id) return null;
+  const messageId = String(message.id);
+
+  for (const store of [voiceMessages, videoMessages, videoNotes, photoMessages, gifMessages, documentMessages]) {
+    if (!Array.isArray(store)) continue;
+    const record = store.find((item) => String(item.messageId || item.id) === messageId);
+    if (record) return record;
+  }
+
+  return null;
+}
+
+function mergeMessageMediaData(message) {
+  if (!message) return null;
+  const storedMedia = getStoredMediaRecordForMessage(message);
+  if (!storedMedia) return message;
+
+  return {
+    ...message,
+    contentType:
+      !message.contentType || message.contentType === "text"
+        ? storedMedia.contentType || storedMedia.type || "document"
+        : message.contentType,
+    path: message.path || storedMedia.path || "",
+    fileId: message.fileId || message.file_id || storedMedia.fileId || storedMedia.file_id || "",
+    fileUniqueId: message.fileUniqueId || message.file_unique_id || storedMedia.fileUniqueId || storedMedia.file_unique_id || "",
+    caption: message.caption || storedMedia.caption || "",
+    duration: Number(message.duration || storedMedia.duration || 0),
+  };
 }
 
 function removeMediaRecordsByMessageIds(messageIds) {
@@ -1977,27 +2010,66 @@ async function sendDialogPayload(chatId, payload, options = {}) {
 }
 
 async function sendStoredConversationMedia(chatId, message, options = {}) {
-  const fileId = message ? message.fileId || message.file_id || "" : "";
-  const storedPath = message ? message.path || "" : "";
+  const mediaMessage = mergeMessageMediaData(message);
+  const fileId = mediaMessage ? mediaMessage.fileId || mediaMessage.file_id || "" : "";
+  const storedPath = mediaMessage ? mediaMessage.path || "" : "";
   const localPath = storedPath ? resolveStoredMediaPath(storedPath) : "";
+  const hasLocalFile = Boolean(localPath && fs.existsSync(localPath));
+  const mediaSource = hasLocalFile ? localPath : fileId;
+  const sendOptions = { ...options };
 
-  if (!message || (storedPath && !fs.existsSync(localPath)) || (!storedPath && !fileId)) {
-    await safeSendMessage(chatId, "❌ Файл не найден.");
+  if (!mediaMessage || !mediaSource) {
+    await safeSendMessage(chatId, "❌ Файл не найден в базе данных.");
     return null;
   }
 
   const captionLines = [
-    getContentTypeLabel(message.contentType),
-    message.duration ? `⏱ Длительность: ${formatDuration(message.duration)}` : "",
-    message.text && message.text !== getContentTypeLabel(message.contentType) ? message.text : "",
+    getContentTypeLabel(mediaMessage.contentType),
+    mediaMessage.duration ? `⏱ Длительность: ${formatDuration(mediaMessage.duration)}` : "",
+    mediaMessage.caption || "",
+    mediaMessage.text && mediaMessage.text !== getContentTypeLabel(mediaMessage.contentType) ? mediaMessage.text : "",
   ].filter(Boolean);
+  const mediaCaption = Object.prototype.hasOwnProperty.call(sendOptions, "caption")
+    ? String(sendOptions.caption || "")
+    : captionLines.join("\n");
+  delete sendOptions.caption;
 
   return sendDialogPayload(chatId, {
-    contentType: message.contentType,
+    contentType: mediaMessage.contentType,
     fileId,
-    path: storedPath,
-    caption: captionLines.join("\n"),
-  }, options);
+    path: hasLocalFile ? storedPath : "",
+    caption: mediaCaption,
+  }, sendOptions);
+}
+
+function getConversationMessageRole(conversation, message) {
+  const sortedMessages = getSortedConversationMessages(conversation);
+  const index = sortedMessages.findIndex((item) => String(item.id) === String(message && message.id));
+  return index <= 0 ? "❓ Вопрос" : "✅ Ответ";
+}
+
+function formatAdminMediaCaption(conversation, message) {
+  return (
+    `📁 Диалог #${getConversationDisplayNumber(conversation)}\n` +
+    `${getConversationMessageRole(conversation, message)}\n` +
+    `🕒 ${formatCardDate(message && message.date)}`
+  );
+}
+
+function getConversationMediaMessages(conversation) {
+  return getSortedConversationMessages(conversation)
+    .map(mergeMessageMediaData)
+    .filter((message) => message && message.contentType !== "text" && (message.path || message.fileId || message.file_id));
+}
+
+async function sendAdminConversationMediaHistory(chatId, conversation) {
+  const mediaMessages = getConversationMediaMessages(conversation);
+
+  for (const message of mediaMessages) {
+    const sentMedia = await sendStoredConversationMedia(chatId, message, { caption: "" });
+    if (!sentMedia) continue;
+    await safeSendMessage(chatId, formatAdminMediaCaption(conversation, message));
+  }
 }
 
 function getLatestInboundConversationMessage(conversation, userId) {
@@ -3236,7 +3308,9 @@ function formatCompactQuestionAnswerDialog(conversation, viewerId, isAdminView =
 function buildConversationMediaKeyboard(conversation, backCallback = "") {
   const rows = [];
   const mediaMessages = Array.isArray(conversation.messages)
-    ? getSortedConversationMessages(conversation).filter((message) => (message.path || message.fileId || message.file_id) && message.contentType !== "text")
+    ? getSortedConversationMessages(conversation)
+      .map(mergeMessageMediaData)
+      .filter((message) => (message.path || message.fileId || message.file_id) && message.contentType !== "text")
     : [];
 
   for (const message of mediaMessages.slice(-20)) {
@@ -3459,10 +3533,12 @@ async function showAdminConversationDetails(chatId, from, conversationId, messag
 
   if (messageId) {
     await safeEditMessageText(chatId, messageId, text, options);
+    await sendAdminConversationMediaHistory(chatId, conversation);
     return;
   }
 
   await safeSendLongMessage(chatId, text, options);
+  await sendAdminConversationMediaHistory(chatId, conversation);
 }
 
 function getUsersList(limit = 20) {
@@ -4398,7 +4474,10 @@ bot.on("callback_query", async (query) => {
         ? conversation.messages.find((item) => String(item.id) === String(messageIdForMedia))
         : null;
 
-      await sendStoredConversationMedia(chatId, message);
+      const sentMedia = await sendStoredConversationMedia(chatId, message, isOwner(from.id) ? { caption: "" } : {});
+      if (sentMedia && isOwner(from.id)) {
+        await safeSendMessage(chatId, formatAdminMediaCaption(conversation, message));
+      }
       return;
     }
 
