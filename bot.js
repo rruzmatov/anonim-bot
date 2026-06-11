@@ -29,6 +29,8 @@ const BLOCKED_USERS_FILE = path.join(DATA_DIR, "blockedUsers.json");
 const REACTIONS_FILE = path.join(DATA_DIR, "reactions.json");
 const TELEGRAM_TEXT_LIMIT = 3900;
 const REACTION_EMOJIS = ["❤️", "🔥", "😍", "🥰", "😘", "🌹", "👏", "😂", "😳", "👍"];
+const JSON_SCAN_EXCLUDED_DIRS = new Set([".git", "node_modules"]);
+const JSON_SCAN_EXCLUDED_FILES = new Set(["package.json", "package-lock.json"]);
 
 const BOT_SHORT_DESCRIPTION =
   "💌 Получай анонимные сообщения\n" +
@@ -1280,6 +1282,308 @@ function isOwner(userId) {
   return OWNER_ID && String(userId) === OWNER_ID;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function normalizeTelegramId(value) {
+  if (value === null || value === undefined) return "";
+  const normalized = String(value).trim();
+  return /^\d+$/.test(normalized) ? normalized : "";
+}
+
+function cleanUsername(value) {
+  if (!value || value === "нет username") return "";
+  return String(value).trim().replace(/^@+/, "");
+}
+
+function pickEarlierDate(current, candidate) {
+  if (!candidate) return current || "";
+
+  const parsedCandidate = new Date(candidate).getTime();
+  if (Number.isNaN(parsedCandidate)) return current || String(candidate);
+  if (!current) return String(candidate);
+
+  const parsedCurrent = new Date(current).getTime();
+  if (Number.isNaN(parsedCurrent) || parsedCandidate < parsedCurrent) return String(candidate);
+  return current;
+}
+
+async function listJsonFilesDeep(dirPath) {
+  const result = [];
+
+  async function walk(currentPath) {
+    let entries = [];
+
+    try {
+      entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
+    } catch (error) {
+      console.error(`json scan readdir error: ${currentPath} - ${error.message}`);
+      return;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(currentPath, entry.name);
+
+      if (entry.isDirectory()) {
+        if (!JSON_SCAN_EXCLUDED_DIRS.has(entry.name)) await walk(entryPath);
+        continue;
+      }
+
+      if (
+        entry.isFile() &&
+        entry.name.endsWith(".json") &&
+        !JSON_SCAN_EXCLUDED_FILES.has(entry.name)
+      ) {
+        result.push(entryPath);
+      }
+    }
+  }
+
+  await walk(dirPath);
+  return [...new Set(result)].sort();
+}
+
+async function readJsonIfExists(filePath) {
+  try {
+    const raw = await fs.promises.readFile(filePath, "utf8");
+    if (!raw.trim()) return null;
+    return JSON.parse(raw);
+  } catch (error) {
+    console.error(`deep user search read error: ${filePath} - ${error.message}`);
+    return null;
+  }
+}
+
+function hasTargetIdInObject(value, targetId) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
+  const idFields = [
+    "id",
+    "userId",
+    "telegramId",
+    "telegram_id",
+    "fromId",
+    "toId",
+    "senderId",
+    "receiverId",
+    "user1",
+    "user2",
+    "ownerId",
+    "chatId",
+  ];
+
+  return idFields.some((field) => normalizeTelegramId(value[field]) === targetId);
+}
+
+function looksLikeMessageRecord(value, sourceFile) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
+  const fileName = path.basename(sourceFile).toLowerCase();
+  const messageFile = /messages|answers|support|conversation/.test(fileName);
+  const hasMessageFields = Boolean(
+    value.text ||
+    value.answerText ||
+    value.questionText ||
+    value.contentType ||
+    value.telegramMessageId ||
+    value.message_id
+  );
+  const hasMessageType = /message|reply|support/.test(String(value.type || ""));
+
+  return messageFile && (hasMessageFields || hasMessageType);
+}
+
+function createMessageRecordKey(value, objectPath) {
+  const stableId = value.id || value.messageId || value.telegramMessageId || value.message_id;
+  if (stableId) {
+    return [
+      "id",
+      value.type || "",
+      stableId,
+      value.conversationId || "",
+      value.fromId || value.senderId || value.userId || "",
+      value.toId || value.receiverId || "",
+    ].join(":");
+  }
+
+  return [
+    "signature",
+    value.type || "",
+    value.date || value.createdAt || "",
+    value.fromId || value.senderId || value.userId || "",
+    value.toId || value.receiverId || "",
+    value.text || value.answerText || value.questionText || "",
+    objectPath,
+  ].join(":");
+}
+
+function collectProfileHints(value, result) {
+  const username = cleanUsername(value.username || value.senderUsername);
+  if (username && !result.username) result.username = username;
+
+  if (value.first_name && !result.firstName) result.firstName = String(value.first_name);
+  if (value.firstName && !result.firstName) result.firstName = String(value.firstName);
+  if (value.last_name && !result.lastName) result.lastName = String(value.last_name);
+  if (value.lastName && !result.lastName) result.lastName = String(value.lastName);
+
+  if (!result.firstName && value.name) {
+    const parts = String(value.name).trim().split(/\s+/).filter(Boolean);
+    result.firstName = parts.shift() || "";
+    result.lastName = result.lastName || parts.join(" ");
+  }
+
+  if (!result.firstName && value.senderName) {
+    const parts = String(value.senderName).trim().split(/\s+/).filter(Boolean);
+    result.firstName = parts.shift() || "";
+    result.lastName = result.lastName || parts.join(" ");
+  }
+
+  const dateFields = [
+    value.firstSeen,
+    value.annStartedAt,
+    value.createdAt,
+    value.date,
+    value.created_at,
+    value.lastActive,
+    value.lastAnnActive,
+  ];
+
+  for (const dateValue of dateFields) {
+    result.firstInteraction = pickEarlierDate(result.firstInteraction, dateValue);
+  }
+}
+
+function scanJsonForUser(data, targetId, sourceFile, result) {
+  const visited = new Set();
+
+  function walk(value, objectPath) {
+    if (!value || typeof value !== "object") return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => walk(item, `${objectPath}[${index}]`));
+      return;
+    }
+
+    const directMatch = hasTargetIdInObject(value, targetId);
+    if (directMatch) {
+      result.found = true;
+      result.sources.add(path.relative(__dirname, sourceFile) || path.basename(sourceFile));
+      collectProfileHints(value, result);
+
+      if (looksLikeMessageRecord(value, sourceFile)) {
+        result.messageRecordKeys.add(createMessageRecordKey(value, objectPath));
+      }
+    }
+
+    for (const [key, child] of Object.entries(value)) {
+      if (normalizeTelegramId(key) === targetId) {
+        result.found = true;
+        result.sources.add(path.relative(__dirname, sourceFile) || path.basename(sourceFile));
+        if (child && typeof child === "object") collectProfileHints(child, result);
+      }
+
+      walk(child, objectPath ? `${objectPath}.${key}` : key);
+    }
+  }
+
+  walk(data, "");
+}
+
+async function findUserDeepByTelegramId(targetId) {
+  const result = {
+    found: false,
+    telegramId: targetId,
+    firstName: "",
+    lastName: "",
+    username: "",
+    firstInteraction: "",
+    sources: new Set(),
+    messageRecordKeys: new Set(),
+  };
+
+  const runtimeData = [
+    [USERS_FILE, users],
+    [ANN_USERS_FILE, annUsers],
+    [MESSAGES_FILE, messages],
+    [ANSWERS_FILE, answers],
+    [SUPPORT_FILE, supportMessages],
+    [STATS_FILE, stats],
+    [CONVERSATIONS_FILE, conversations],
+    [BLOCKED_USERS_FILE, blockedUsers],
+    [REACTIONS_FILE, reactions],
+  ];
+
+  for (const [filePath, data] of runtimeData) {
+    scanJsonForUser(data, targetId, filePath, result);
+  }
+
+  const jsonFiles = await listJsonFilesDeep(__dirname);
+  for (const filePath of jsonFiles) {
+    const data = await readJsonIfExists(filePath);
+    if (data !== null) scanJsonForUser(data, targetId, filePath, result);
+  }
+
+  return {
+    ...result,
+    sources: [...result.sources].sort(),
+    messageCount: result.messageRecordKeys.size,
+  };
+}
+
+function formatOwnerUserSearchResult(result) {
+  const username = result.username ? `@${result.username}` : "—";
+  const profileLink = result.username
+    ? `https://t.me/${result.username}`
+    : `tg://user?id=${result.telegramId}`;
+  const messageCount = result.messageCount ? String(result.messageCount) : "не удалось определить";
+  const sources = result.sources.length ? result.sources.join(", ") : "—";
+
+  return (
+    `🔎 <b>Пользователь найден</b>\n\n` +
+    `🆔 <b>Telegram ID:</b> <code>${escapeHtml(result.telegramId)}</code>\n` +
+    `👤 <b>Имя:</b> ${escapeHtml(result.firstName || "—")}\n` +
+    `👥 <b>Фамилия:</b> ${escapeHtml(result.lastName || "—")}\n` +
+    `🔗 <b>Username:</b> ${escapeHtml(username)}\n` +
+    `🕒 <b>Первое взаимодействие:</b> ${escapeHtml(result.firstInteraction ? formatDate(result.firstInteraction) : "—")}\n` +
+    `💬 <b>Количество сообщений:</b> ${escapeHtml(messageCount)}\n\n` +
+    `🌐 <b>Ссылка:</b> <a href="${escapeHtml(profileLink)}">${escapeHtml(profileLink)}</a>\n\n` +
+    `📁 <b>Источники:</b> ${escapeHtml(sources)}`
+  );
+}
+
+async function handleOwnerIdLookup(chatId, from, rawTargetId) {
+  if (!isOwner(from.id)) return;
+
+  const targetId = normalizeTelegramId(rawTargetId);
+  if (!targetId) {
+    await safeSendMessage(chatId, "ℹ️ Использование: /id 123456789");
+    return;
+  }
+
+  try {
+    const result = await findUserDeepByTelegramId(targetId);
+    if (!result.found) {
+      await safeSendMessage(chatId, "❌ Пользователь не найден в базе.");
+      return;
+    }
+
+    await safeSendMessage(chatId, formatOwnerUserSearchResult(result), {
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+    });
+  } catch (error) {
+    console.error("/id error:", error.message);
+    await safeSendMessage(chatId, "❌ Произошла ошибка при поиске пользователя.");
+  }
+}
+
 function mainMenuKeyboard() {
   return {
     inline_keyboard: [[{ text: "ℹ️ Помощь", callback_data: "help" }]],
@@ -2417,6 +2721,9 @@ bot.onText(/^\/users$/, async (msg) => showAdminUsers(msg.chat.id, msg.from));
 bot.onText(/^\/annusers$/, async (msg) => showAdminAnnUsers(msg.chat.id, msg.from));
 bot.onText(/^\/messages$/, async (msg) => showAdminMessages(msg.chat.id, msg.from));
 bot.onText(/^\/export$/, async (msg) => exportJson(msg.chat.id, msg.from));
+bot.onText(/^\/id(?:@[A-Za-z0-9_]+)?(?:\s+(\d+))?$/i, async (msg, match) => {
+  await handleOwnerIdLookup(msg.chat.id, msg.from, match && match[1]);
+});
 
 bot.on("callback_query", async (query) => {
   const data = query.data;
